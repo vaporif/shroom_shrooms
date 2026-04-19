@@ -4,7 +4,7 @@ use shroom_core::{GridPos, GridWorld, Tile};
 
 use crate::camera::GameCamera;
 
-const TILE_SIZE: f32 = 16.0;
+const TILE_SIZE: f32 = 48.0;
 const PRIORITY_RADIUS: i32 = 3;
 
 pub fn priority_system(
