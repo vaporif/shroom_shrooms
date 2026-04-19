@@ -3,6 +3,8 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    devshells.url = "github:vaporif/nix-devshells";
+    devshells.inputs.nixpkgs.follows = "nixpkgs";
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -13,19 +15,39 @@
   outputs = {
     self,
     nixpkgs,
+    devshells,
     fenix,
     flake-utils,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
-      pkgs = import nixpkgs {inherit system;};
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [fenix.overlays.default];
+      };
 
-      rustToolchain = fenix.packages.${system}.stable.withComponents [
-        "cargo"
-        "clippy"
-        "rustc"
-        "rust-src"
-        "rust-analyzer"
+      rust = pkgs.fenix.stable;
+
+      rustStable = pkgs.fenix.combine [
+        (rust.withComponents [
+          "cargo"
+          "clippy"
+          "rustc"
+          "rustfmt"
+          "rust-analyzer"
+          "rust-src"
+        ])
+      ];
+
+      rustNightly = pkgs.fenix.combine [
+        (pkgs.fenix.latest.withComponents [
+          "cargo"
+          "clippy"
+          "rustc"
+          "rustfmt"
+          "rust-analyzer"
+          "rust-src"
+        ])
       ];
 
       darwinDeps = with pkgs;
@@ -49,22 +71,50 @@
           xorg.libXi
           xorg.libXrandr
         ];
+
+      commonShellHook =
+        ''
+          export RUST_LOG=info
+          export RUST_SRC_PATH="${rust.rust-src}/lib/rustlib/src/rust/library"
+          export PATH=$HOME/.cargo/bin:$PATH
+        ''
+        + pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
+          export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath linuxDeps}:$LD_LIBRARY_PATH"
+        '';
+
+      commonPackages = with pkgs; [
+        just
+        taplo
+        bacon
+        cargo-nextest
+        cargo-watch
+      ];
+
+      mkDevShell = toolchain:
+        pkgs.mkShell {
+          nativeBuildInputs = with pkgs;
+            [
+              toolchain
+              pkg-config
+            ]
+            ++ commonPackages;
+
+          buildInputs = darwinDeps ++ linuxDeps;
+
+          shellHook = commonShellHook;
+        };
     in {
-      devShells.default = pkgs.mkShell {
-        nativeBuildInputs = with pkgs; [
-          rustToolchain
-          pkg-config
-        ];
+      formatter = pkgs.alejandra;
 
-        buildInputs = darwinDeps ++ linuxDeps;
+      devShells.default = mkDevShell rustStable;
 
+      devShells.nightly = (mkDevShell rustNightly).overrideAttrs (old: {
         shellHook =
-          ''
-            export RUST_LOG=info
-          ''
-          + pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
-            export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath linuxDeps}:$LD_LIBRARY_PATH"
+          old.shellHook
+          + ''
+            export CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift
+            export RUSTFLAGS="-Zshare-generics=y $RUSTFLAGS"
           '';
-      };
+      });
     });
 }
