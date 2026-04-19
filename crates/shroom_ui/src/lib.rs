@@ -4,10 +4,12 @@ mod ability_bar;
 pub mod game_screens;
 mod hud;
 mod slot_machine_ui;
+mod spec_picker;
 
 pub use ability_bar::*;
 pub use hud::*;
 pub use slot_machine_ui::*;
+pub use spec_picker::*;
 
 pub struct UiPlugin;
 
@@ -32,6 +34,8 @@ impl Plugin for UiPlugin {
                     game_screens::spawn_defeat_panel,
                     game_screens::restart_button_system,
                     game_screens::game_outcome_system,
+                    spec_picker_system,
+                    spec_picker_click_system,
                 ),
             );
     }
