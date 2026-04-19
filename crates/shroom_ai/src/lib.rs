@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use shroom_core::SimulationSet;
+
 mod combat;
 mod environment;
 mod organisms;
@@ -28,7 +30,8 @@ impl Plugin for AiPlugin {
                     environment_threat_system,
                     combat_resolution_system,
                 )
-                    .chain(),
+                    .chain()
+                    .in_set(SimulationSet),
             );
     }
 }
