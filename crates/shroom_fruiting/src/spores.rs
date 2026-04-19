@@ -1,0 +1,260 @@
+use bevy::prelude::*;
+use rand::prelude::*;
+use rand::rngs::StdRng;
+use shroom_core::{
+    GridPos, GridWorld, HyphalTip, MushroomEntity, Occupant, RegionId, RegionStates, Tile,
+    SPORE_RELAY_ACCURACY_RADIUS,
+};
+
+#[derive(Resource)]
+pub struct SporeRng(pub StdRng);
+
+impl Default for SporeRng {
+    fn default() -> Self {
+        Self(StdRng::seed_from_u64(0))
+    }
+}
+
+pub fn spore_system(
+    mushrooms: Query<&MushroomEntity>,
+    tiles: Query<(&GridPos, &Tile)>,
+    grid: Res<GridWorld>,
+    region_states: Res<RegionStates>,
+    mut commands: Commands,
+    mut rng: ResMut<SporeRng>,
+) {
+    for mushroom in mushrooms.iter() {
+        let owning_region = find_owning_region(&tiles, mushroom.pos);
+        let Some(region_id) = owning_region else {
+            continue;
+        };
+
+        if region_states.get(region_id).is_none() {
+            continue;
+        }
+
+        let Some(landing_pos) = pick_spore_landing(&grid, &tiles, mushroom.pos, &mut rng.0) else {
+            continue;
+        };
+
+        commands.spawn((GridPos(landing_pos), HyphalTip { region_id, age: 0 }));
+    }
+}
+
+fn find_owning_region(tiles: &Query<(&GridPos, &Tile)>, pos: IVec2) -> Option<RegionId> {
+    for (gpos, tile) in tiles.iter() {
+        let dist = (gpos.0 - pos).abs();
+        if dist.x <= 3 && dist.y <= 3 {
+            if let Occupant::Player(rid) = tile.occupant {
+                return Some(rid);
+            }
+        }
+    }
+    None
+}
+
+fn pick_spore_landing(
+    _grid: &GridWorld,
+    tiles: &Query<(&GridPos, &Tile)>,
+    origin: IVec2,
+    rng: &mut StdRng,
+) -> Option<IVec2> {
+    let radius = SPORE_RELAY_ACCURACY_RADIUS;
+
+    let candidates: Vec<IVec2> = tiles
+        .iter()
+        .filter_map(|(gpos, tile)| {
+            let dist = (gpos.0 - origin).abs();
+            if dist.x <= radius
+                && dist.y <= radius
+                && tile.terrain.is_passable()
+                && !tile.occupant.is_player()
+                && !tile.occupant.is_rival()
+            {
+                Some(gpos.0)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    if candidates.is_empty() {
+        return None;
+    }
+
+    let idx = rng.random_range(0..candidates.len());
+    Some(candidates[idx])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use shroom_core::{FragmentId, TerrainType};
+
+    fn test_app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.init_resource::<GridWorld>();
+        app.init_resource::<RegionStates>();
+        app.insert_resource(SporeRng(StdRng::seed_from_u64(42)));
+        app
+    }
+
+    fn spawn_tile_at(app: &mut App, pos: IVec2, tile: Tile) -> Entity {
+        let entity = app.world_mut().spawn((GridPos(pos), tile)).id();
+        app.world_mut()
+            .resource_mut::<GridWorld>()
+            .tiles
+            .insert(pos, entity);
+        entity
+    }
+
+    #[test]
+    fn spore_spawns_tip_near_mushroom() {
+        let mut app = test_app();
+
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+
+        spawn_tile_at(
+            &mut app,
+            IVec2::new(5, 5),
+            Tile {
+                occupant: Occupant::Player(rid),
+                ..default()
+            },
+        );
+
+        for x in 3..=7 {
+            for y in 3..=7 {
+                if x == 5 && y == 5 {
+                    continue;
+                }
+                spawn_tile_at(&mut app, IVec2::new(x, y), Tile::default());
+            }
+        }
+
+        app.world_mut().spawn(MushroomEntity {
+            fragment_id: FragmentId(0),
+            pos: IVec2::new(5, 5),
+            vision_radius: 10.0,
+        });
+
+        app.add_systems(Update, spore_system);
+        app.update();
+
+        let tip_count = app
+            .world_mut()
+            .query::<&HyphalTip>()
+            .iter(app.world())
+            .count();
+        assert_eq!(tip_count, 1, "spore should spawn exactly one hyphal tip");
+
+        let (tip_pos, tip) = app
+            .world_mut()
+            .query::<(&GridPos, &HyphalTip)>()
+            .single(app.world())
+            .expect("should have exactly one hyphal tip");
+        assert_eq!(tip.region_id, rid, "tip should belong to mushroom's region");
+
+        let dist = (tip_pos.0 - IVec2::new(5, 5)).abs();
+        assert!(
+            dist.x <= SPORE_RELAY_ACCURACY_RADIUS && dist.y <= SPORE_RELAY_ACCURACY_RADIUS,
+            "tip should land within spore accuracy radius"
+        );
+    }
+
+    #[test]
+    fn spore_does_not_land_on_impassable_tile() {
+        let mut app = test_app();
+
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+
+        spawn_tile_at(
+            &mut app,
+            IVec2::new(5, 5),
+            Tile {
+                occupant: Occupant::Player(rid),
+                ..default()
+            },
+        );
+
+        for x in 3..=7 {
+            for y in 3..=7 {
+                if x == 5 && y == 5 {
+                    continue;
+                }
+                spawn_tile_at(
+                    &mut app,
+                    IVec2::new(x, y),
+                    Tile {
+                        terrain: TerrainType::Rock,
+                        ..default()
+                    },
+                );
+            }
+        }
+
+        app.world_mut().spawn(MushroomEntity {
+            fragment_id: FragmentId(0),
+            pos: IVec2::new(5, 5),
+            vision_radius: 10.0,
+        });
+
+        app.add_systems(Update, spore_system);
+        app.update();
+
+        let tip_count = app
+            .world_mut()
+            .query::<&HyphalTip>()
+            .iter(app.world())
+            .count();
+        assert_eq!(
+            tip_count, 0,
+            "no tip should spawn when all nearby tiles are impassable"
+        );
+    }
+
+    #[test]
+    fn spore_skips_mushroom_without_owning_region() {
+        let mut app = test_app();
+
+        for x in 3..=7 {
+            for y in 3..=7 {
+                spawn_tile_at(&mut app, IVec2::new(x, y), Tile::default());
+            }
+        }
+
+        app.world_mut().spawn(MushroomEntity {
+            fragment_id: FragmentId(0),
+            pos: IVec2::new(5, 5),
+            vision_radius: 10.0,
+        });
+
+        app.add_systems(Update, spore_system);
+        app.update();
+
+        let tip_count = app
+            .world_mut()
+            .query::<&HyphalTip>()
+            .iter(app.world())
+            .count();
+        assert_eq!(
+            tip_count, 0,
+            "no tip should spawn when mushroom has no owning region"
+        );
+    }
+
+    #[test]
+    fn no_crash_with_no_mushrooms() {
+        let mut app = test_app();
+        spawn_tile_at(&mut app, IVec2::ZERO, Tile::default());
+        app.add_systems(Update, spore_system);
+        app.update();
+    }
+}

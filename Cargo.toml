@@ -11,6 +11,7 @@ license = "MIT"
 
 [workspace.dependencies]
 bevy = "0.18"
+rand = "0.9"
 shroom_core = { path = "crates/shroom_core" }
 shroom_world = { path = "crates/shroom_world" }
 shroom_growth = { path = "crates/shroom_growth" }
