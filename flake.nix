@@ -47,6 +47,7 @@
           "rustfmt"
           "rust-analyzer"
           "rust-src"
+          "rustc-codegen-cranelift"
         ])
       ];
 
