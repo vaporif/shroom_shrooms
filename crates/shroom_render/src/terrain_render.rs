@@ -35,7 +35,9 @@ impl Material2d for TerrainMaterial {
 }
 
 #[derive(Component)]
-pub struct TerrainMeshTile;
+pub struct TerrainMeshTile {
+    pub grid_pos: IVec2,
+}
 
 pub fn terrain_base_color(terrain: TerrainType) -> LinearRgba {
     match terrain {
@@ -105,7 +107,7 @@ pub fn terrain_render_system(
 
         let entity = commands
             .spawn((
-                TerrainMeshTile,
+                TerrainMeshTile { grid_pos: gpos.0 },
                 Mesh2d(meshes.add(Rectangle::new(TILE_SIZE, TILE_SIZE))),
                 MeshMaterial2d(material),
                 Transform::from_translation(world_pos)
@@ -113,6 +115,26 @@ pub fn terrain_render_system(
             ))
             .id();
         sprite_map.sprites.insert(gpos.0, entity);
+    }
+}
+
+/// Updates discovery and time uniforms on existing terrain materials each frame.
+pub fn terrain_discovery_update_system(
+    tiles: Query<(&TerrainMeshTile, &MeshMaterial2d<TerrainMaterial>)>,
+    mut materials: ResMut<Assets<TerrainMaterial>>,
+    discovery: Res<crate::data_layer::DiscoveryMap>,
+    time: Res<Time>,
+) {
+    let elapsed = time.elapsed_secs();
+    for (tile, mat_handle) in tiles.iter() {
+        if let Some(mat) = materials.get_mut(&mat_handle.0) {
+            mat.uniforms.discovered = discovery
+                .discovered
+                .get(&tile.grid_pos)
+                .copied()
+                .unwrap_or(0.0);
+            mat.uniforms.time = elapsed;
+        }
     }
 }
 

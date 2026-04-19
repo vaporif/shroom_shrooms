@@ -12,7 +12,12 @@ const MIN_ZOOM: f32 = 0.15;
 const MAX_ZOOM: f32 = 4.0;
 
 pub fn spawn_camera(mut commands: Commands) {
-    commands.spawn((Camera2d, GameCamera, Transform::from_xyz(640.0, 480.0, 0.0)));
+    // Center on map midpoint (where the player starts)
+    commands.spawn((
+        Camera2d,
+        GameCamera,
+        Transform::from_xyz(1920.0, 1440.0, 0.0),
+    ));
 }
 
 pub fn camera_system(

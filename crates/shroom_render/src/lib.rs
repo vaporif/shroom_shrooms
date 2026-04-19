@@ -46,6 +46,8 @@ impl Plugin for RenderPlugin {
                 PostUpdate,
                 (
                     terrain_render::terrain_render_system,
+                    terrain_render::terrain_discovery_update_system
+                        .after(terrain_render::terrain_render_system),
                     network_render::network_render_system,
                     entity_render::tip_render_system,
                     entity_render::organism_render_system,
