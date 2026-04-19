@@ -4747,6 +4747,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "shroom_core",
+ "shroom_input",
 ]
 
 [[package]]

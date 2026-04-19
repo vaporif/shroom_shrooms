@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use bevy::ecs::message::Message;
 use bevy::prelude::*;
-use std::collections::HashMap;
 
 pub struct CorePlugin;
 
@@ -9,12 +10,21 @@ impl Plugin for CorePlugin {
         app.init_resource::<GridWorld>()
             .init_resource::<RegionStates>()
             .init_resource::<GameState>()
+            .init_resource::<TickTimer>()
+            .init_resource::<SimulationSpeed>()
+            .init_resource::<GamePhase>()
+            .init_resource::<MutationSelection>()
+            .init_resource::<SporeAction>()
+            .init_resource::<ActiveAbilityEffects>()
+            .init_resource::<TerrainSpriteMap>()
+            .init_resource::<HintsVisible>()
             .add_message::<TurnAdvanced>()
             .add_message::<TileDiscovered>()
             .add_message::<StudyComplete>()
             .add_message::<DecompositionComplete>()
             .add_message::<FragmentFused>()
-            .add_message::<SlotMachineTriggered>();
+            .add_message::<SlotMachineTriggered>()
+            .add_message::<NeutralFungiMerged>();
     }
 }
 
@@ -161,6 +171,7 @@ pub struct RegionState {
     pub biomass: f32,
     pub specialization_investment: f32,
     pub tile_count: u32,
+    pub nutrient_bonus: f32,
 }
 
 impl RegionState {
@@ -174,6 +185,7 @@ impl RegionState {
             biomass: 0.0,
             specialization_investment: 0.0,
             tile_count: 0,
+            nutrient_bonus: 0.0,
         }
     }
 
@@ -351,3 +363,205 @@ pub const MUSHROOM_MOISTURE_RADIUS: i32 = 5;
 pub const SPORE_RELAY_ACCURACY_RADIUS: i32 = 5;
 pub const BACTERIA_BIOMASS_BLOCK_THRESHOLD: f32 = 5.0;
 pub const TRADE_LINK_NEGLECT_LIMIT: u32 = 20;
+
+// --- Tick System ---
+
+#[derive(Resource)]
+pub struct TickTimer {
+    pub timer: Timer,
+}
+
+impl Default for TickTimer {
+    fn default() -> Self {
+        Self {
+            timer: Timer::from_seconds(1.0, TimerMode::Repeating),
+        }
+    }
+}
+
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum SimulationSpeed {
+    Paused,
+    #[default]
+    Normal,
+    Fast,
+    Fastest,
+}
+
+impl SimulationSpeed {
+    #[must_use]
+    pub fn duration_secs(self) -> f32 {
+        match self {
+            Self::Paused => 1.0,
+            Self::Normal => 1.0,
+            Self::Fast => 0.5,
+            Self::Fastest => 0.25,
+        }
+    }
+
+    #[must_use]
+    pub fn is_paused(self) -> bool {
+        matches!(self, Self::Paused)
+    }
+
+    #[must_use]
+    pub fn cycle_next(self) -> Self {
+        match self {
+            Self::Paused => Self::Normal,
+            Self::Normal => Self::Fast,
+            Self::Fast => Self::Fastest,
+            Self::Fastest => Self::Paused,
+        }
+    }
+
+    #[must_use]
+    pub fn speed_up(self) -> Self {
+        match self {
+            Self::Paused => Self::Normal,
+            Self::Normal => Self::Fast,
+            Self::Fast | Self::Fastest => Self::Fastest,
+        }
+    }
+
+    #[must_use]
+    pub fn slow_down(self) -> Self {
+        match self {
+            Self::Paused | Self::Normal => Self::Paused,
+            Self::Fast => Self::Normal,
+            Self::Fastest => Self::Fast,
+        }
+    }
+
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Paused => "\u{23f8} Paused",
+            Self::Normal => "\u{25b6} 1x",
+            Self::Fast => "\u{25b6}\u{25b6} 2x",
+            Self::Fastest => "\u{25b6}\u{25b6}\u{25b6} 4x",
+        }
+    }
+}
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SimulationSet;
+
+// --- Game Phase ---
+
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum GamePhase {
+    #[default]
+    Title,
+    Playing,
+    Victory,
+    Defeat,
+    Restarting,
+}
+
+// --- Mutation Selection (Task 2) ---
+
+#[derive(Resource, Default, Debug, Clone, Reflect)]
+pub struct MutationSelection {
+    pub selected_index: Option<usize>,
+}
+
+// --- Spore Action (Task 2) ---
+
+#[derive(Resource, Debug, Clone, Reflect)]
+pub struct SporeAction {
+    pub cooldown_remaining: u32,
+    pub cooldown_max: u32,
+    pub triggered: bool,
+}
+
+impl Default for SporeAction {
+    fn default() -> Self {
+        Self {
+            cooldown_remaining: 0,
+            cooldown_max: 10,
+            triggered: false,
+        }
+    }
+}
+
+// --- Active Ability Effects (Task 2) ---
+
+#[derive(Resource, Default, Debug, Clone, Reflect)]
+pub struct ActiveAbilityEffects {
+    pub effects: Vec<ActiveEffect>,
+}
+
+#[derive(Debug, Clone, Reflect)]
+pub struct ActiveEffect {
+    pub region_id: RegionId,
+    pub effect_type: AbilityEffectType,
+    pub ticks_remaining: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum AbilityEffectType {
+    DoubleNutrientProduction,
+    StealBiomass,
+    RevealRadius,
+    DoubleTradeEnergy,
+    KillFauna,
+    InfiltrateRival,
+    DoubleTransport,
+    DoubleStudySpeed,
+}
+
+// --- Neutral Fungi Merged (Task 2) ---
+
+#[derive(Message)]
+pub struct NeutralFungiMerged {
+    pub fungus_id: u32,
+    pub region_id: RegionId,
+}
+
+// --- Terrain Sprite Tracking (Task 2) ---
+
+#[derive(Resource, Default, Debug)]
+pub struct TerrainSpriteMap {
+    pub sprites: HashMap<IVec2, Entity>,
+}
+
+// --- Organism Sprite Link (Task 2) ---
+
+#[derive(Component, Debug)]
+pub struct OrganismSpriteLink(pub Entity);
+
+// --- Hints Visibility (Task 5) ---
+
+#[derive(Resource, Debug, Reflect)]
+pub struct HintsVisible(pub bool);
+
+impl Default for HintsVisible {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tick_timer_defaults_to_one_second_repeating() {
+        let tick = TickTimer::default();
+        assert_eq!(tick.timer.duration().as_secs_f32(), 1.0);
+        assert!(tick.timer.mode() == TimerMode::Repeating);
+    }
+
+    #[test]
+    fn simulation_speed_duration() {
+        assert_eq!(SimulationSpeed::Normal.duration_secs(), 1.0);
+        assert_eq!(SimulationSpeed::Fast.duration_secs(), 0.5);
+        assert_eq!(SimulationSpeed::Fastest.duration_secs(), 0.25);
+    }
+
+    #[test]
+    fn simulation_speed_is_paused() {
+        assert!(SimulationSpeed::Paused.is_paused());
+        assert!(!SimulationSpeed::Normal.is_paused());
+    }
+}

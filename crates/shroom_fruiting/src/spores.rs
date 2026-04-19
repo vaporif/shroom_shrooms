@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use shroom_core::{
-    GridPos, GridWorld, HyphalTip, MushroomEntity, Occupant, RegionId, RegionStates, Tile,
-    SPORE_RELAY_ACCURACY_RADIUS,
+    GridPos, GridWorld, HyphalTip, MushroomEntity, Occupant, RegionId, RegionStates, SporeAction,
+    Tile, SPORE_RELAY_ACCURACY_RADIUS,
 };
 
 #[derive(Resource)]
@@ -22,23 +22,46 @@ pub fn spore_system(
     region_states: Res<RegionStates>,
     mut commands: Commands,
     mut rng: ResMut<SporeRng>,
+    mut spore_action: ResMut<SporeAction>,
 ) {
-    for mushroom in mushrooms.iter() {
-        let owning_region = find_owning_region(&tiles, mushroom.pos);
-        let Some(region_id) = owning_region else {
-            continue;
-        };
+    // Tick down cooldown
+    if spore_action.cooldown_remaining > 0 {
+        spore_action.cooldown_remaining -= 1;
+    }
 
-        if region_states.get(region_id).is_none() {
-            continue;
-        }
+    // Only fire when player triggers and cooldown is ready
+    if !spore_action.triggered || spore_action.cooldown_remaining > 0 {
+        spore_action.triggered = false;
+        return;
+    }
 
-        let Some(landing_pos) = pick_spore_landing(&grid, &tiles, mushroom.pos, &mut rng.0) else {
-            continue;
-        };
+    // Pick one random mushroom to fire from
+    let mushroom_list: Vec<&MushroomEntity> = mushrooms.iter().collect();
+    if mushroom_list.is_empty() {
+        spore_action.triggered = false;
+        return;
+    }
 
+    let idx = rng.0.random_range(0..mushroom_list.len());
+    let mushroom = mushroom_list[idx];
+
+    let owning_region = find_owning_region(&tiles, mushroom.pos);
+    let Some(region_id) = owning_region else {
+        spore_action.triggered = false;
+        return;
+    };
+
+    if region_states.get(region_id).is_none() {
+        spore_action.triggered = false;
+        return;
+    }
+
+    if let Some(landing_pos) = pick_spore_landing(&grid, &tiles, mushroom.pos, &mut rng.0) {
         commands.spawn((GridPos(landing_pos), HyphalTip { region_id, age: 0 }));
     }
+
+    spore_action.triggered = false;
+    spore_action.cooldown_remaining = spore_action.cooldown_max;
 }
 
 fn find_owning_region(tiles: &Query<(&GridPos, &Tile)>, pos: IVec2) -> Option<RegionId> {
@@ -96,6 +119,7 @@ mod tests {
         app.add_plugins(MinimalPlugins);
         app.init_resource::<GridWorld>();
         app.init_resource::<RegionStates>();
+        app.init_resource::<SporeAction>();
         app.insert_resource(SporeRng(StdRng::seed_from_u64(42)));
         app
     }
@@ -141,6 +165,9 @@ mod tests {
             pos: IVec2::new(5, 5),
             vision_radius: 10.0,
         });
+
+        // Trigger the spore action
+        app.world_mut().resource_mut::<SporeAction>().triggered = true;
 
         app.add_systems(Update, spore_system);
         app.update();
@@ -206,6 +233,9 @@ mod tests {
             vision_radius: 10.0,
         });
 
+        // Trigger
+        app.world_mut().resource_mut::<SporeAction>().triggered = true;
+
         app.add_systems(Update, spore_system);
         app.update();
 
@@ -236,6 +266,9 @@ mod tests {
             vision_radius: 10.0,
         });
 
+        // Trigger
+        app.world_mut().resource_mut::<SporeAction>().triggered = true;
+
         app.add_systems(Update, spore_system);
         app.update();
 
@@ -254,7 +287,117 @@ mod tests {
     fn no_crash_with_no_mushrooms() {
         let mut app = test_app();
         spawn_tile_at(&mut app, IVec2::ZERO, Tile::default());
+        app.world_mut().resource_mut::<SporeAction>().triggered = true;
         app.add_systems(Update, spore_system);
         app.update();
+    }
+
+    #[test]
+    fn spore_does_not_fire_without_trigger() {
+        let mut app = test_app();
+
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+
+        spawn_tile_at(
+            &mut app,
+            IVec2::new(5, 5),
+            Tile {
+                occupant: Occupant::Player(rid),
+                ..default()
+            },
+        );
+
+        for x in 3..=7 {
+            for y in 3..=7 {
+                if x == 5 && y == 5 {
+                    continue;
+                }
+                spawn_tile_at(&mut app, IVec2::new(x, y), Tile::default());
+            }
+        }
+
+        app.world_mut().spawn(MushroomEntity {
+            fragment_id: FragmentId(0),
+            pos: IVec2::new(5, 5),
+            vision_radius: 10.0,
+        });
+
+        // Not triggered -- should not fire
+        app.add_systems(Update, spore_system);
+        app.update();
+
+        let tip_count = app
+            .world_mut()
+            .query::<&HyphalTip>()
+            .iter(app.world())
+            .count();
+        assert_eq!(tip_count, 0, "spore should not fire without trigger");
+    }
+
+    #[test]
+    fn spore_cooldown_prevents_rapid_fire() {
+        let mut app = test_app();
+
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+
+        spawn_tile_at(
+            &mut app,
+            IVec2::new(5, 5),
+            Tile {
+                occupant: Occupant::Player(rid),
+                ..default()
+            },
+        );
+
+        for x in 3..=7 {
+            for y in 3..=7 {
+                if x == 5 && y == 5 {
+                    continue;
+                }
+                spawn_tile_at(&mut app, IVec2::new(x, y), Tile::default());
+            }
+        }
+
+        app.world_mut().spawn(MushroomEntity {
+            fragment_id: FragmentId(0),
+            pos: IVec2::new(5, 5),
+            vision_radius: 10.0,
+        });
+
+        app.add_systems(Update, spore_system);
+
+        // First trigger -- should fire
+        app.world_mut().resource_mut::<SporeAction>().triggered = true;
+        app.update();
+
+        let tip_count = app
+            .world_mut()
+            .query::<&HyphalTip>()
+            .iter(app.world())
+            .count();
+        assert_eq!(tip_count, 1, "first trigger should spawn a tip");
+
+        // Immediately trigger again -- should be blocked by cooldown
+        app.world_mut().resource_mut::<SporeAction>().triggered = true;
+        app.update();
+
+        let tip_count = app
+            .world_mut()
+            .query::<&HyphalTip>()
+            .iter(app.world())
+            .count();
+        assert_eq!(tip_count, 1, "second trigger should be blocked by cooldown");
+
+        let action = app.world().resource::<SporeAction>();
+        assert!(
+            action.cooldown_remaining > 0,
+            "cooldown should still be active"
+        );
     }
 }

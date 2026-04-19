@@ -109,13 +109,25 @@
 
       devShells.default = mkDevShell rustStable;
 
+      # Cranelift for fast builds WITHOUT dynamic linking (cargo run)
+      # On macOS, cranelift can't handle __mod_init_func sections
+      # that bevy/dynamic_linking uses, so don't combine the two.
       devShells.nightly = (mkDevShell rustNightly).overrideAttrs (old: {
         shellHook =
           old.shellHook
-          + ''
-            export CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift
-            export RUSTFLAGS="-Zshare-generics=y $RUSTFLAGS"
-          '';
+          + (
+            if pkgs.stdenv.hostPlatform.isDarwin
+            then ''
+              # macOS: use LLVM backend (cranelift breaks bevy dynamic linking)
+              # Run with: cargo run --features dev
+              export RUSTFLAGS="-Zshare-generics=y $RUSTFLAGS"
+            ''
+            else ''
+              # Linux: cranelift works fine with dynamic linking
+              export CARGO_PROFILE_DEV_CODEGEN_BACKEND=cranelift
+              export RUSTFLAGS="-Zshare-generics=y $RUSTFLAGS"
+            ''
+          );
       });
     });
 }

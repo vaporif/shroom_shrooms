@@ -1,5 +1,7 @@
 use bevy::prelude::*;
-use shroom_core::{FaunaAgent, FragmentAgent, GridPos, PlantRootAgent, SpecializationType};
+use shroom_core::{
+    FaunaAgent, FragmentAgent, GridPos, OrganismSpriteLink, PlantRootAgent, SpecializationType,
+};
 
 use crate::data_layer::TipPositions;
 
@@ -29,11 +31,7 @@ pub fn tip_render_system(
             _ => Color::srgb(0.9, 0.9, 0.9),
         };
 
-        let world_pos = Vec3::new(
-            pos.x as f32 * TILE_SIZE,
-            pos.y as f32 * TILE_SIZE,
-            2.0, // above terrain and paths
-        );
+        let world_pos = Vec3::new(pos.x as f32 * TILE_SIZE, pos.y as f32 * TILE_SIZE, 2.0);
 
         commands.spawn((
             TipSprite,
@@ -49,16 +47,25 @@ pub fn tip_render_system(
 
 pub fn organism_render_system(
     mut commands: Commands,
-    fragments: Query<(&GridPos, &FragmentAgent), Without<OrganismSprite>>,
-    plants: Query<(&GridPos, &PlantRootAgent), Without<OrganismSprite>>,
-    fauna: Query<(&GridPos, &FaunaAgent), Without<OrganismSprite>>,
+    linked_sprites: Query<(Entity, &OrganismSpriteLink), With<OrganismSprite>>,
+    fragments: Query<(Entity, &GridPos, &FragmentAgent), Without<OrganismSprite>>,
+    plants: Query<(Entity, &GridPos, &PlantRootAgent), Without<OrganismSprite>>,
+    fauna: Query<(Entity, &GridPos, &FaunaAgent), Without<OrganismSprite>>,
 ) {
-    for (gpos, _fragment) in fragments.iter() {
+    // Despawn sprites whose source entity no longer exists
+    for (sprite_entity, link) in linked_sprites.iter() {
+        if commands.get_entity(link.0).is_err() {
+            commands.entity(sprite_entity).despawn();
+        }
+    }
+
+    for (source, gpos, _fragment) in fragments.iter() {
         let world_pos = gpos.0.as_vec2() * TILE_SIZE;
         commands.spawn((
             OrganismSprite,
+            OrganismSpriteLink(source),
             Sprite {
-                color: Color::srgb(0.9, 0.7, 1.0), // glowing purple for fragments
+                color: Color::srgb(0.9, 0.7, 1.0),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.8)),
                 ..default()
             },
@@ -66,10 +73,11 @@ pub fn organism_render_system(
         ));
     }
 
-    for (gpos, _plant) in plants.iter() {
+    for (source, gpos, _plant) in plants.iter() {
         let world_pos = gpos.0.as_vec2() * TILE_SIZE;
         commands.spawn((
             OrganismSprite,
+            OrganismSpriteLink(source),
             Sprite {
                 color: Color::srgb(0.2, 0.7, 0.3),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.7)),
@@ -79,10 +87,11 @@ pub fn organism_render_system(
         ));
     }
 
-    for (gpos, _fauna_agent) in fauna.iter() {
+    for (source, gpos, _fauna_agent) in fauna.iter() {
         let world_pos = gpos.0.as_vec2() * TILE_SIZE;
         commands.spawn((
             OrganismSprite,
+            OrganismSpriteLink(source),
             Sprite {
                 color: Color::srgb(0.7, 0.3, 0.2),
                 custom_size: Some(Vec2::splat(TILE_SIZE * 0.5)),

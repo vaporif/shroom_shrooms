@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use shroom_core::SimulationSet;
 
 mod region_tracking;
 mod terrain_gen;
@@ -12,6 +13,6 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<TerrainSeed>()
             .add_systems(Startup, terrain_generation)
-            .add_systems(Update, region_tracking_system);
+            .add_systems(Update, region_tracking_system.in_set(SimulationSet));
     }
 }

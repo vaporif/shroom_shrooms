@@ -4,6 +4,8 @@ mod spores;
 
 use bevy::prelude::*;
 
+use shroom_core::SimulationSet;
+
 pub use effects::mushroom_effect_system;
 pub use fruiting::fruiting_system;
 pub use spores::{spore_system, SporeRng};
@@ -19,7 +21,8 @@ impl Plugin for FruitingPlugin {
                 effects::mushroom_effect_system,
                 spores::spore_system,
             )
-                .chain(),
+                .chain()
+                .in_set(SimulationSet),
         );
     }
 }

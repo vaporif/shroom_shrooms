@@ -9,8 +9,14 @@ pub struct TerrainSprite;
 pub fn terrain_render_system(
     mut commands: Commands,
     tiles: Query<(&GridPos, &Tile), Changed<Tile>>,
+    mut sprite_map: ResMut<TerrainSpriteMap>,
 ) {
     for (gpos, tile) in tiles.iter() {
+        // Despawn old sprite for this position
+        if let Some(old_entity) = sprite_map.sprites.remove(&gpos.0) {
+            commands.entity(old_entity).despawn();
+        }
+
         let color = match tile.terrain {
             TerrainType::Soil => Color::srgb(0.45, 0.32, 0.18),
             TerrainType::Rock => Color::srgb(0.5, 0.5, 0.5),
@@ -27,14 +33,17 @@ pub fn terrain_render_system(
             0.0,
         );
 
-        commands.spawn((
-            TerrainSprite,
-            Sprite {
-                color,
-                custom_size: Some(Vec2::splat(TILE_SIZE)),
-                ..default()
-            },
-            Transform::from_translation(world_pos),
-        ));
+        let entity = commands
+            .spawn((
+                TerrainSprite,
+                Sprite {
+                    color,
+                    custom_size: Some(Vec2::splat(TILE_SIZE)),
+                    ..default()
+                },
+                Transform::from_translation(world_pos),
+            ))
+            .id();
+        sprite_map.sprites.insert(gpos.0, entity);
     }
 }

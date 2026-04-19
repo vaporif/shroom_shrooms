@@ -1,17 +1,33 @@
+use bevy::ecs::message::MessageWriter;
 use bevy::prelude::*;
 use shroom_core::*;
 
 pub fn neutral_fungi_system(
-    mut fungi: Query<(&GridPos, &mut NeutralFungusAgent)>,
+    mut commands: Commands,
+    mut fungi: Query<(Entity, &GridPos, &mut NeutralFungusAgent)>,
     tiles: Query<&Tile>,
     grid: Res<GridWorld>,
+    mut region_states: ResMut<RegionStates>,
+    mut merged_messages: MessageWriter<NeutralFungiMerged>,
 ) {
-    for (gpos, mut fungus) in fungi.iter_mut() {
-        if let Some(&entity) = grid.tiles.get(&gpos.0)
-            && let Ok(tile) = tiles.get(entity)
+    for (entity, gpos, mut fungus) in fungi.iter_mut() {
+        if let Some(&tile_entity) = grid.tiles.get(&gpos.0)
+            && let Ok(tile) = tiles.get(tile_entity)
             && tile.occupant.is_player()
         {
             fungus.merge_progress += 0.05;
+
+            if fungus.merge_progress >= 1.0 {
+                let rid = tile.occupant.region_id().unwrap();
+                if let Some(state) = region_states.get_mut(rid) {
+                    state.nutrient_bonus += 0.1;
+                }
+                merged_messages.write(NeutralFungiMerged {
+                    fungus_id: fungus.fungus_id,
+                    region_id: rid,
+                });
+                commands.entity(entity).despawn();
+            }
         }
     }
 }

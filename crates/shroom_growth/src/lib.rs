@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use shroom_core::SimulationSet;
+
 mod decay;
 mod nutrient;
 mod tip;
@@ -21,7 +23,8 @@ impl Plugin for GrowthPlugin {
                 hyphal_tip_system,
                 decay_system,
             )
-                .chain(),
+                .chain()
+                .in_set(SimulationSet),
         );
     }
 }

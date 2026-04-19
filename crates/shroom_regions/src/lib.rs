@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use shroom_core::SimulationSet;
+
 mod discovery;
 mod fragment;
 mod mutation;
@@ -34,7 +36,8 @@ impl Plugin for RegionsPlugin {
                     mutation_system,
                     fragment_system,
                 )
-                    .chain(),
+                    .chain()
+                    .in_set(SimulationSet),
             );
     }
 }

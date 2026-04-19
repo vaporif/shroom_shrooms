@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use shroom_core::{SlotMachineTriggered, UnlockOption};
+use shroom_core::{MutationSelection, SlotMachineTriggered, UnlockOption};
 
 #[derive(Component)]
 pub struct SlotMachinePanel;
@@ -92,6 +92,7 @@ pub fn slot_machine_selection_system(
     mut commands: Commands,
     interactions: Query<(&Interaction, &SlotMachineOption), Changed<Interaction>>,
     mut state: ResMut<SlotMachineState>,
+    mut mutation_selection: ResMut<MutationSelection>,
     panels: Query<Entity, With<SlotMachinePanel>>,
 ) {
     if !state.active {
@@ -101,6 +102,7 @@ pub fn slot_machine_selection_system(
     for (interaction, option) in interactions.iter() {
         if *interaction == Interaction::Pressed {
             state.selected = Some(option.index);
+            mutation_selection.selected_index = Some(option.index);
             state.active = false;
 
             for entity in panels.iter() {

@@ -2,8 +2,9 @@ use bevy::prelude::*;
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use shroom_core::{
-    BacteriaColonyAgent, FragmentAgent, FragmentId, GameState, GridPos, GridWorld,
-    NeutralFungusAgent, PlantRootAgent, TerrainType, Tile, TileContents,
+    BacteriaColonyAgent, FragmentAgent, FragmentId, GameState, GridPos, GridWorld, HyphalTip,
+    NeutralFungusAgent, Occupant, PlantRootAgent, RegionStates, RivalId, TerrainType, Tile,
+    TileContents,
 };
 
 const MAP_WIDTH: i32 = 80;
@@ -22,6 +23,7 @@ pub fn terrain_generation(
     mut commands: Commands,
     mut grid: ResMut<GridWorld>,
     mut game_state: ResMut<GameState>,
+    mut region_states: ResMut<RegionStates>,
     seed: Res<TerrainSeed>,
 ) {
     let mut rng = StdRng::seed_from_u64(seed.0);
@@ -152,6 +154,70 @@ pub fn terrain_generation(
                 spread_interval: 10,
             },
         ));
+    }
+
+    // Spawn player starting region near center
+    let player_rid = region_states.create_region();
+    if let Some(state) = region_states.get_mut(player_rid) {
+        state.nutrients = 100.0;
+        state.energy = 20.0;
+    }
+    let player_start = IVec2::new(MAP_WIDTH / 2, MAP_HEIGHT / 2);
+    for dx in -2..=2 {
+        for dy in -2..=2 {
+            let pos = player_start + IVec2::new(dx, dy);
+            if let Some(&entity) = grid.tiles.get(&pos) {
+                commands.entity(entity).insert(Tile {
+                    terrain: TerrainType::Soil,
+                    occupant: Occupant::Player(player_rid),
+                    nutrient_level: 0.8,
+                    moisture: 0.5,
+                    discovered: true,
+                    contents: None,
+                    biomass: 1.0,
+                    nutrient_gradient: Vec2::ZERO,
+                    priority_bias: Vec2::ZERO,
+                });
+            }
+        }
+    }
+    // Spawn initial hyphal tips at the edges of the starting cluster
+    for &offset in &[
+        IVec2::new(-2, 0),
+        IVec2::new(2, 0),
+        IVec2::new(0, -2),
+        IVec2::new(0, 2),
+    ] {
+        let tip_pos = player_start + offset;
+        commands.spawn((
+            GridPos(tip_pos),
+            HyphalTip {
+                region_id: player_rid,
+                age: 0,
+            },
+        ));
+    }
+
+    // Spawn rival in the opposite corner
+    let rival_id = RivalId(0);
+    let rival_start = IVec2::new(MAP_WIDTH / 4, MAP_HEIGHT / 4);
+    for dx in -1..=1 {
+        for dy in -1..=1 {
+            let pos = rival_start + IVec2::new(dx, dy);
+            if let Some(&entity) = grid.tiles.get(&pos) {
+                commands.entity(entity).insert(Tile {
+                    terrain: TerrainType::Soil,
+                    occupant: Occupant::Rival(rival_id),
+                    nutrient_level: 0.5,
+                    moisture: 0.5,
+                    discovered: false,
+                    contents: None,
+                    biomass: 1.5,
+                    nutrient_gradient: Vec2::ZERO,
+                    priority_bias: Vec2::ZERO,
+                });
+            }
+        }
     }
 }
 

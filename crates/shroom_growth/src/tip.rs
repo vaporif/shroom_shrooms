@@ -57,12 +57,16 @@ pub fn hyphal_tip_system(
 
         let mut best_score = f32::NEG_INFINITY;
         let mut best_pos = None;
+        let is_infiltrator = region_states
+            .get(tip.region_id)
+            .is_some_and(|r| r.specialization == Some(SpecializationType::Infiltrator));
+
         for (npos, nentity) in grid.neighbors(pos) {
             if let Ok((_, ntile)) = tiles.get(nentity) {
                 if !ntile.terrain.is_passable() {
                     continue;
                 }
-                if ntile.occupant.is_rival() {
+                if ntile.occupant.is_rival() && !is_infiltrator {
                     continue;
                 }
                 let offset = (npos - pos).as_vec2();
@@ -95,10 +99,15 @@ pub fn hyphal_tip_system(
 
         if let Some(&tentity) = grid.tiles.get(target)
             && let Ok((_, mut tile)) = tiles.get_mut(tentity)
-            && tile.occupant == Occupant::Empty
         {
-            tile.occupant = Occupant::Player(*rid);
-            tile.biomass = 0.5;
+            if tile.occupant == Occupant::Empty {
+                tile.occupant = Occupant::Player(*rid);
+                tile.biomass = 0.5;
+            } else if tile.occupant.is_rival() {
+                // Infiltrator flips rival tile at 50% biomass
+                tile.occupant = Occupant::Player(*rid);
+                tile.biomass *= 0.5;
+            }
         }
 
         commands.entity(*tip_entity).insert(GridPos(*target));
