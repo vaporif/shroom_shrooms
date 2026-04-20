@@ -1,7 +1,7 @@
 use bevy::prelude::*;
+use fungai_core::*;
 use rand::prelude::*;
 use rand::rngs::StdRng;
-use fungai_core::*;
 
 #[derive(Resource)]
 pub struct EnvironmentRng(pub StdRng);

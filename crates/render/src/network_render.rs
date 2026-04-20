@@ -326,11 +326,7 @@ fn generate_decorative_branches(
     let max_branches = if biomass < 1.0 {
         0
     } else if biomass < 3.0 {
-        if rand0 < 0.5 {
-            1
-        } else {
-            0
-        }
+        if rand0 < 0.5 { 1 } else { 0 }
     } else {
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         {
@@ -599,7 +595,7 @@ pub fn network_render_system(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fungai_core::{create_hex_layout, SpecializationType};
+    use fungai_core::{SpecializationType, create_hex_layout};
 
     #[test]
     fn catmull_rom_passes_through_control_points() {

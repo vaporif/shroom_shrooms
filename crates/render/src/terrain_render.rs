@@ -146,9 +146,9 @@ pub fn terrain_discovery_update_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::MinimalPlugins;
     use bevy::asset::AssetPlugin;
     use bevy::sprite_render::Material2dPlugin;
-    use bevy::MinimalPlugins;
 
     #[test]
     fn terrain_material_stores_uniforms() {

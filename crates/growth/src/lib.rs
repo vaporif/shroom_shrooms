@@ -7,8 +7,10 @@ mod nutrient;
 mod tip;
 
 pub use decay::decay_system;
-pub use nutrient::{nutrient_gradient_system, nutrient_production_system, nutrient_transport_system};
-pub use tip::{hyphal_tip_system, GrowthRng};
+pub use nutrient::{
+    nutrient_gradient_system, nutrient_production_system, nutrient_transport_system,
+};
+pub use tip::{GrowthRng, hyphal_tip_system};
 
 pub struct GrowthPlugin;
 

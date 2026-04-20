@@ -6,7 +6,7 @@ mod selection;
 mod specialization_input;
 mod speed;
 
-pub use camera::{camera_system, spawn_camera, GameCamera};
+pub use camera::{GameCamera, camera_system, spawn_camera};
 pub use fungai_core::SelectedRegion;
 pub use priority::priority_system;
 pub use selection::selection_system;

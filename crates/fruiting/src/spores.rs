@@ -1,10 +1,10 @@
 use bevy::prelude::*;
-use rand::prelude::*;
-use rand::rngs::StdRng;
 use fungai_core::{
     GridPos, GridWorld, Hex, HyphalTip, MushroomEntity, Occupant, RegionId, RegionStates,
-    SporeAction, Tile, SPORE_RELAY_ACCURACY_RADIUS,
+    SPORE_RELAY_ACCURACY_RADIUS, SporeAction, Tile,
 };
+use rand::prelude::*;
+use rand::rngs::StdRng;
 
 #[derive(Resource)]
 pub struct SporeRng(pub StdRng);

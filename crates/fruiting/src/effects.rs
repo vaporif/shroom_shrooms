@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use fungai_core::{
-    GridPos, MushroomEntity, Occupant, RegionStates, Tile, MUSHROOM_MOISTURE_BONUS,
-    MUSHROOM_MOISTURE_RADIUS,
+    GridPos, MUSHROOM_MOISTURE_BONUS, MUSHROOM_MOISTURE_RADIUS, MushroomEntity, Occupant,
+    RegionStates, Tile,
 };
 
 pub fn mufungai_effect_system(

@@ -54,7 +54,7 @@ pub fn priority_system(
 
 #[cfg(test)]
 mod tests {
-    use fungai_core::{create_hex_layout, GridPos, GridWorld, Hex, HexLayout, Tile};
+    use fungai_core::{GridPos, GridWorld, Hex, HexLayout, Tile, create_hex_layout};
 
     use bevy::prelude::*;
 

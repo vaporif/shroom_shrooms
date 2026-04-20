@@ -112,10 +112,7 @@ mod tests {
         app.update();
 
         let grid = app.world().resource::<GridWorld>();
-        let tile = app
-            .world()
-            .get::<Tile>(grid.tiles[&neighbor])
-            .unwrap();
+        let tile = app.world().get::<Tile>(grid.tiles[&neighbor]).unwrap();
         assert!(
             tile.occupant.is_player(),
             "weak rival tile should flip to player when biomass ratio exceeds {}",
@@ -155,10 +152,7 @@ mod tests {
         app.update();
 
         let grid = app.world().resource::<GridWorld>();
-        let tile = app
-            .world()
-            .get::<Tile>(grid.tiles[&neighbor])
-            .unwrap();
+        let tile = app.world().get::<Tile>(grid.tiles[&neighbor]).unwrap();
         assert!(
             tile.occupant.is_rival(),
             "balanced border should remain contested"

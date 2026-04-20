@@ -1,6 +1,8 @@
+use std::collections::HashSet;
+
 use bevy::prelude::*;
 use fungai_core::{
-    FaunaAgent, FragmentAgent, FruitingBody, GridPos, HexLayout, MushroomEntity,
+    FaunaAgent, FragmentAgent, FruitingBody, GridPos, Hex, HexLayout, MushroomEntity,
     NeutralFungusAgent, OrganismSpriteLink, PlantRootAgent, SpecializationType,
 };
 
@@ -208,31 +210,79 @@ pub fn priority_arrow_render_system(
 #[derive(Component)]
 pub struct RegionHighlightSprite;
 
+/// Build a triangle-list mesh of thin quads for the boundary edges of a hex region.
+fn build_outline_mesh(tiles: &[Hex], layout: &HexLayout, half_width: f32) -> Option<Mesh> {
+    let tile_set: HashSet<Hex> = tiles.iter().copied().collect();
+    let mut positions: Vec<[f32; 3]> = Vec::new();
+    let mut indices: Vec<u32> = Vec::new();
+
+    for &hex in tiles {
+        let corners = layout.hex_corners(hex);
+        let neighbors = hex.all_neighbors();
+        for (i, neighbor) in neighbors.iter().enumerate() {
+            if tile_set.contains(neighbor) {
+                continue;
+            }
+            let a = corners[i];
+            let b = corners[(i + 1) % 6];
+
+            let dir = (b - a).normalize();
+            let normal = Vec2::new(-dir.y, dir.x);
+            let offset = normal * half_width;
+
+            let base = positions.len() as u32;
+            positions.push([(a - offset).x, (a - offset).y, 0.0]);
+            positions.push([(a + offset).x, (a + offset).y, 0.0]);
+            positions.push([(b + offset).x, (b + offset).y, 0.0]);
+            positions.push([(b - offset).x, (b - offset).y, 0.0]);
+
+            indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+        }
+    }
+
+    if positions.is_empty() {
+        return None;
+    }
+
+    let normals: Vec<[f32; 3]> = vec![[0.0, 0.0, 1.0]; positions.len()];
+    let uvs: Vec<[f32; 2]> = vec![[0.0, 0.0]; positions.len()];
+
+    Some(
+        Mesh::new(
+            bevy::mesh::PrimitiveTopology::TriangleList,
+            bevy::asset::RenderAssetUsages::default(),
+        )
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_inserted_indices(bevy::mesh::Indices::U32(indices)),
+    )
+}
+
 pub fn region_highlight_render_system(
     mut commands: Commands,
     selected_tiles: Res<SelectedRegionTiles>,
     existing: Query<Entity, With<RegionHighlightSprite>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
     layout: Res<HexLayout>,
 ) {
     for entity in existing.iter() {
         commands.entity(entity).despawn();
     }
 
-    let inner_radius = layout.scale.x * 3.0_f32.sqrt() / 2.0;
-    let highlight_size = Vec2::splat(inner_radius * 2.0);
+    if selected_tiles.tiles.is_empty() {
+        return;
+    }
 
-    for hex in &selected_tiles.tiles {
-        let base_pos = layout.hex_to_world_pos(*hex);
-        let world_pos = Vec3::new(base_pos.x, base_pos.y, 0.5);
-
+    if let Some(mesh) = build_outline_mesh(&selected_tiles.tiles, &layout, 1.5) {
         commands.spawn((
             RegionHighlightSprite,
-            Sprite {
-                color: Color::srgba(1.0, 1.0, 1.0, 0.15),
-                custom_size: Some(highlight_size),
-                ..default()
-            },
-            Transform::from_translation(world_pos),
+            Mesh2d(meshes.add(mesh)),
+            MeshMaterial2d(
+                materials.add(ColorMaterial::from_color(Color::srgba(1.0, 0.9, 0.5, 0.8))),
+            ),
+            Transform::from_translation(Vec3::new(0.0, 0.0, 0.5)),
         ));
     }
 }

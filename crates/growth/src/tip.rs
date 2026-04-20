@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use bevy::prelude::*;
+use fungai_core::*;
 use rand::prelude::*;
 use rand::rngs::StdRng;
-use fungai_core::*;
 
 #[derive(Resource)]
 pub struct GrowthRng(pub StdRng);
@@ -279,10 +279,8 @@ mod tests {
         let tip_b = shared_neighbors[3]; // opposite side
 
         let layout = app.world().resource::<HexLayout>();
-        let dir_a =
-            (layout.hex_to_world_pos(shared) - layout.hex_to_world_pos(tip_a)).normalize();
-        let dir_b =
-            (layout.hex_to_world_pos(shared) - layout.hex_to_world_pos(tip_b)).normalize();
+        let dir_a = (layout.hex_to_world_pos(shared) - layout.hex_to_world_pos(tip_a)).normalize();
+        let dir_b = (layout.hex_to_world_pos(shared) - layout.hex_to_world_pos(tip_b)).normalize();
 
         spawn_tile_at(
             &mut app,

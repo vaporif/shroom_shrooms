@@ -1,9 +1,9 @@
 use bevy::ecs::message::{MessageReader, MessageWriter};
 use bevy::prelude::*;
-use rand::rngs::StdRng;
+use fungai_core::{SlotMachineTriggered, StudyComplete, UnlockOption, UnlockPool};
 use rand::Rng;
 use rand::SeedableRng;
-use fungai_core::{SlotMachineTriggered, StudyComplete, UnlockOption, UnlockPool};
+use rand::rngs::StdRng;
 
 #[derive(Resource)]
 pub struct SlotMachineRng(pub StdRng);

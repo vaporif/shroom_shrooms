@@ -9,12 +9,12 @@ mod slot_machine;
 mod specialization;
 
 pub use discovery::{
-    decomposer_discovery_system, explorer_discovery_system, researcher_study_system,
-    DecompProgress, StudyProgress,
+    DecompProgress, StudyProgress, decomposer_discovery_system, explorer_discovery_system,
+    researcher_study_system,
 };
 pub use fragment::fragment_system;
-pub use mutation::{mutation_system, AppliedMutations};
-pub use slot_machine::{slot_machine_system, SlotMachineRng};
+pub use mutation::{AppliedMutations, mutation_system};
+pub use slot_machine::{SlotMachineRng, slot_machine_system};
 pub use specialization::specialization_system;
 
 pub struct RegionsPlugin;

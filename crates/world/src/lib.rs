@@ -5,7 +5,7 @@ mod region_tracking;
 mod terrain_gen;
 
 pub use region_tracking::region_tracking_system;
-pub use terrain_gen::{terrain_generation, TerrainSeed};
+pub use terrain_gen::{TerrainSeed, terrain_generation};
 
 pub struct WorldPlugin;
 

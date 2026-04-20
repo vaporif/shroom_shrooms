@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
-use hexx::Hex;
 use fungai_core::{GridPos, GridWorld, Occupant, RegionId, RegionStates, Tile};
+use hexx::Hex;
 
 pub fn region_tracking_system(
     mut tiles: Query<(&GridPos, &mut Tile)>,
