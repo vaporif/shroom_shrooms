@@ -30,6 +30,7 @@ pub fn spawn_ability_bar(mut commands: Commands) {
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn update_ability_bar(
     region_states: Res<RegionStates>,
     selected: Res<SelectedRegion>,

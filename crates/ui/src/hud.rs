@@ -106,7 +106,7 @@ pub fn spawn_hud(mut commands: Commands) {
         });
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn update_hud(
     game_state: Res<GameState>,
     region_states: Res<RegionStates>,

@@ -4,6 +4,7 @@ use fungai_core::*;
 
 use crate::camera::GameCamera;
 
+#[allow(clippy::too_many_arguments)]
 pub fn selection_system(
     mouse: Res<ButtonInput<MouseButton>>,
     windows: Query<&Window, With<PrimaryWindow>>,

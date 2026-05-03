@@ -77,6 +77,7 @@ fn build_hex_mesh(layout: &HexLayout) -> Mesh {
     .with_inserted_indices(bevy::mesh::Indices::U16(mesh_info.indices))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn terrain_render_system(
     mut commands: Commands,
     tiles: Query<(&GridPos, &Tile), Changed<Tile>>,

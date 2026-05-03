@@ -67,10 +67,10 @@ pub fn spore_system(
 fn find_owning_region(tiles: &Query<(&GridPos, &Tile)>, pos: Hex) -> Option<RegionId> {
     for (gpos, tile) in tiles.iter() {
         let dist = gpos.0.unsigned_distance_to(pos);
-        if dist <= 3 {
-            if let Occupant::Player(rid) = tile.occupant {
-                return Some(rid);
-            }
+        if dist <= 3
+            && let Occupant::Player(rid) = tile.occupant
+        {
+            return Some(rid);
         }
     }
     None

@@ -464,7 +464,7 @@ mod tests {
 
         // Distance 9: outside radius 8
         assert!(
-            discovery.discovered.get(&Hex::new(19, 10)).is_none(),
+            !discovery.discovered.contains_key(&Hex::new(19, 10)),
             "tiles outside radius 8 should not be in the map"
         );
     }

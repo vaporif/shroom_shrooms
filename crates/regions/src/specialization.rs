@@ -4,16 +4,16 @@ use fungai_core::{RegionStates, SPEC_TIER_1};
 const INVESTMENT_RATE: f32 = 2.0;
 
 pub fn specialization_system(mut region_states: ResMut<RegionStates>) {
-    for (_rid, state) in &mut region_states.regions {
+    for state in region_states.regions.values_mut() {
         let Some(target) = state.target_specialization else {
             continue;
         };
 
-        if let Some(current) = state.specialization {
-            if current != target {
-                state.specialization = None;
-                state.specialization_investment = 0.0;
-            }
+        if let Some(current) = state.specialization
+            && current != target
+        {
+            state.specialization = None;
+            state.specialization_investment = 0.0;
         }
 
         let invest_amount = INVESTMENT_RATE.min(state.nutrients);

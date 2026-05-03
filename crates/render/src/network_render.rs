@@ -495,6 +495,7 @@ fn build_branch_tree(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn network_render_system(
     mut commands: Commands,
     graph: Res<BranchGraph>,
