@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use bevy::{
     asset::RenderAssetUsages,
+    ecs::system::SystemParam,
     mesh::PrimitiveTopology,
     prelude::*,
     reflect::TypePath,
@@ -495,14 +496,18 @@ fn build_branch_tree(
     result
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct NetworkAssets<'w> {
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<NetworkMaterial>>,
+}
+
 pub fn network_render_system(
     mut commands: Commands,
     graph: Res<BranchGraph>,
     rival_graph: Res<RivalBranchGraph>,
     existing: Query<Entity, With<BranchTreeMesh>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut net_materials: ResMut<Assets<NetworkMaterial>>,
+    mut assets: NetworkAssets,
     time: Res<Time>,
     layout: Res<HexLayout>,
 ) {
@@ -542,8 +547,8 @@ pub fn network_render_system(
         for mesh in tree_meshes {
             commands.spawn((
                 BranchTreeMesh,
-                Mesh2d(meshes.add(mesh)),
-                MeshMaterial2d(net_materials.add(NetworkMaterial {
+                Mesh2d(assets.meshes.add(mesh)),
+                MeshMaterial2d(assets.materials.add(NetworkMaterial {
                     uniforms: NetworkUniforms {
                         core_color: core,
                         body_color: body,
@@ -577,8 +582,8 @@ pub fn network_render_system(
         for mesh in tree_meshes {
             commands.spawn((
                 BranchTreeMesh,
-                Mesh2d(meshes.add(mesh)),
-                MeshMaterial2d(net_materials.add(NetworkMaterial {
+                Mesh2d(assets.meshes.add(mesh)),
+                MeshMaterial2d(assets.materials.add(NetworkMaterial {
                     uniforms: NetworkUniforms {
                         core_color: rival_core,
                         body_color: rival_body,

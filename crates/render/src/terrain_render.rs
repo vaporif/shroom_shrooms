@@ -1,4 +1,5 @@
 use bevy::{
+    ecs::system::SystemParam,
     prelude::*,
     reflect::TypePath,
     render::render_resource::{AsBindGroup, ShaderType},
@@ -77,19 +78,23 @@ fn build_hex_mesh(layout: &HexLayout) -> Mesh {
     .with_inserted_indices(bevy::mesh::Indices::U16(mesh_info.indices))
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct TerrainAssets<'w> {
+    sprite_map: ResMut<'w, TerrainSpriteMap>,
+    meshes: ResMut<'w, Assets<Mesh>>,
+    materials: ResMut<'w, Assets<TerrainMaterial>>,
+}
+
 pub fn terrain_render_system(
     mut commands: Commands,
     tiles: Query<(&GridPos, &Tile), Changed<Tile>>,
-    mut sprite_map: ResMut<TerrainSpriteMap>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<TerrainMaterial>>,
+    mut assets: TerrainAssets,
     time: Res<Time>,
     discovery: Res<crate::data_layer::DiscoveryMap>,
     layout: Res<HexLayout>,
 ) {
     for (gpos, tile) in tiles.iter() {
-        if let Some(old_entity) = sprite_map.sprites.remove(&gpos.0) {
+        if let Some(old_entity) = assets.sprite_map.sprites.remove(&gpos.0) {
             commands.entity(old_entity).despawn();
         }
 
@@ -99,7 +104,7 @@ pub fn terrain_render_system(
         let base_pos = layout.hex_to_world_pos(gpos.0);
         let world_pos = Vec3::new(base_pos.x, base_pos.y, 0.0);
 
-        let material = materials.add(TerrainMaterial {
+        let material = assets.materials.add(TerrainMaterial {
             uniforms: TerrainUniforms {
                 base_color,
                 terrain_type: t_index,
@@ -115,12 +120,12 @@ pub fn terrain_render_system(
         let entity = commands
             .spawn((
                 TerrainMeshTile { grid_pos: gpos.0 },
-                Mesh2d(meshes.add(build_hex_mesh(&layout))),
+                Mesh2d(assets.meshes.add(build_hex_mesh(&layout))),
                 MeshMaterial2d(material),
                 Transform::from_translation(world_pos).with_scale(Vec3::splat(1.01)),
             ))
             .id();
-        sprite_map.sprites.insert(gpos.0, entity);
+        assets.sprite_map.sprites.insert(gpos.0, entity);
     }
 }
 

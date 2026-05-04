@@ -1,40 +1,31 @@
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
-use fungai_core::{GridPos, GridWorld, HexLayout, Tile};
-
-use crate::camera::GameCamera;
+use fungai_core::{GridPos, HexLayout, SelectedRegion, Tile};
 
 const PRIORITY_RADIUS: i32 = 3;
 
 pub fn priority_system(
-    mouse: Res<ButtonInput<MouseButton>>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    windows: Query<&Window, With<PrimaryWindow>>,
-    camera_q: Query<(&Camera, &GlobalTransform), With<GameCamera>>,
-    _grid: Res<GridWorld>,
-    mut tiles: Query<(&GridPos, &mut Tile)>,
+    selected: Res<SelectedRegion>,
     layout: Res<HexLayout>,
+    mut tiles: Query<(&GridPos, &mut Tile)>,
 ) {
-    if !mouse.just_pressed(MouseButton::Left) || !keyboard.pressed(KeyCode::ShiftLeft) {
+    let shift = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
+
+    if keyboard.just_pressed(KeyCode::KeyP) && shift {
+        for (_gpos, mut tile) in &mut tiles {
+            tile.priority_bias = Vec2::ZERO;
+        }
         return;
     }
 
-    let Ok(window) = windows.single() else {
+    if !keyboard.just_pressed(KeyCode::KeyP) {
         return;
-    };
-    let Ok((camera, cam_transform)) = camera_q.single() else {
-        return;
-    };
-    let Some(cursor_pos) = window.cursor_position() else {
-        return;
-    };
-    let Ok(world_pos) = camera.viewport_to_world_2d(cam_transform, cursor_pos) else {
+    }
+
+    let Some(target_hex) = selected.selected_pos else {
         return;
     };
 
-    let target_hex = layout.world_pos_to_hex(world_pos);
-
-    // Clear all existing bias before setting new one
     for (_gpos, mut tile) in &mut tiles {
         tile.priority_bias = Vec2::ZERO;
     }
@@ -54,18 +45,21 @@ pub fn priority_system(
 
 #[cfg(test)]
 mod tests {
-    use fungai_core::{GridPos, GridWorld, Hex, HexLayout, Tile, create_hex_layout};
+    use super::*;
+    use fungai_core::{create_hex_layout, GridPos, GridWorld, Hex, Tile};
 
-    use bevy::prelude::*;
-
-    #[test]
-    fn priority_bias_set_on_nearby_tiles() {
+    fn test_app() -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
+        app.init_resource::<ButtonInput<KeyCode>>();
         app.init_resource::<GridWorld>();
+        app.init_resource::<SelectedRegion>();
         app.insert_resource(create_hex_layout());
+        app.add_systems(Update, priority_system);
+        app
+    }
 
-        let hex = Hex::new(5, -3);
+    fn spawn_tile(app: &mut App, hex: Hex) -> Entity {
         let entity = app
             .world_mut()
             .spawn((
@@ -80,23 +74,67 @@ mod tests {
             .resource_mut::<GridWorld>()
             .tiles
             .insert(hex, entity);
+        entity
+    }
 
-        // Skip mouse input (needs a window), test bias math directly
-        {
-            let layout = app.world().resource::<HexLayout>();
-            let target = Hex::new(8, -3);
-            let tile_world = layout.hex_to_world_pos(hex);
-            let target_world = layout.hex_to_world_pos(target);
-            let dir = (target_world - tile_world).normalize() * 0.5;
+    #[test]
+    fn p_key_sets_bias_around_selected_tile() {
+        let mut app = test_app();
+        let target = Hex::new(8, -3);
+        let near = Hex::new(5, -3);
+        let _ = spawn_tile(&mut app, target);
+        let near_entity = spawn_tile(&mut app, near);
 
-            let mut tile = app
-                .world_mut()
-                .get_mut::<Tile>(entity)
-                .expect("tile exists");
-            tile.priority_bias = dir;
-        }
+        app.world_mut()
+            .resource_mut::<SelectedRegion>()
+            .selected_pos = Some(target);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyP);
+        app.update();
 
-        let tile = app.world().get::<Tile>(entity).expect("tile exists");
-        assert!(tile.priority_bias.x > 0.0, "bias should point right");
+        let tile = app.world().get::<Tile>(near_entity).expect("tile exists");
+        assert!(
+            tile.priority_bias.length_squared() > 0.0,
+            "near tile should have bias"
+        );
+    }
+
+    #[test]
+    fn shift_p_clears_bias() {
+        let mut app = test_app();
+        let hex = Hex::new(0, 0);
+        let entity = spawn_tile(&mut app, hex);
+        app.world_mut()
+            .get_mut::<Tile>(entity)
+            .unwrap()
+            .priority_bias = Vec2::new(0.5, 0.0);
+
+        let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        input.press(KeyCode::ShiftLeft);
+        input.press(KeyCode::KeyP);
+        app.update();
+
+        let tile = app.world().get::<Tile>(entity).unwrap();
+        assert_eq!(tile.priority_bias, Vec2::ZERO);
+    }
+
+    #[test]
+    fn p_with_no_selection_is_noop() {
+        let mut app = test_app();
+        let hex = Hex::new(0, 0);
+        let entity = spawn_tile(&mut app, hex);
+        app.world_mut()
+            .get_mut::<Tile>(entity)
+            .unwrap()
+            .priority_bias = Vec2::new(0.5, 0.0);
+
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::KeyP);
+        app.update();
+
+        let tile = app.world().get::<Tile>(entity).unwrap();
+        assert_eq!(tile.priority_bias, Vec2::new(0.5, 0.0));
     }
 }

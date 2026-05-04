@@ -1,35 +1,40 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use fungai_core::*;
 
 use crate::camera::GameCamera;
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct PointerInput<'w, 's> {
+    mouse: Res<'w, ButtonInput<MouseButton>>,
+    windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
+    camera_q: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<GameCamera>>,
+    ui_interactions: Query<'w, 's, &'static Interaction, With<Button>>,
+}
+
 pub fn selection_system(
-    mouse: Res<ButtonInput<MouseButton>>,
-    windows: Query<&Window, With<PrimaryWindow>>,
-    camera_q: Query<(&Camera, &GlobalTransform), With<GameCamera>>,
+    pointer: PointerInput,
     grid: Res<GridWorld>,
     tiles: Query<&Tile>,
     mut selected: ResMut<SelectedRegion>,
-    ui_interactions: Query<&Interaction, With<Button>>,
     layout: Res<HexLayout>,
 ) {
-    if !mouse.just_pressed(MouseButton::Left) {
+    if !pointer.mouse.just_pressed(MouseButton::Left) {
         return;
     }
 
     // Don't process world clicks when UI buttons are being pressed
-    for interaction in ui_interactions.iter() {
+    for interaction in pointer.ui_interactions.iter() {
         if *interaction != Interaction::None {
             return;
         }
     }
 
-    let Ok(window) = windows.single() else {
+    let Ok(window) = pointer.windows.single() else {
         return;
     };
-    let Ok((camera, cam_transform)) = camera_q.single() else {
+    let Ok((camera, cam_transform)) = pointer.camera_q.single() else {
         return;
     };
 

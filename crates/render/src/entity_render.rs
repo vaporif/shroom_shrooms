@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use fungai_core::{
     FaunaAgent, FragmentAgent, FruitingBody, GridPos, Hex, HexLayout, MushroomEntity,
@@ -60,21 +61,32 @@ pub fn tip_render_system(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct OrganismQueries<'w, 's> {
+    linked_sprites: Query<'w, 's, (Entity, &'static OrganismSpriteLink), With<OrganismSprite>>,
+    fragments:
+        Query<'w, 's, (Entity, &'static GridPos, &'static FragmentAgent), Without<OrganismSprite>>,
+    plants:
+        Query<'w, 's, (Entity, &'static GridPos, &'static PlantRootAgent), Without<OrganismSprite>>,
+    fauna: Query<'w, 's, (Entity, &'static GridPos, &'static FaunaAgent), Without<OrganismSprite>>,
+    fruiting_bodies: Query<'w, 's, (Entity, &'static FruitingBody), Without<OrganismSprite>>,
+    mushrooms: Query<'w, 's, (Entity, &'static MushroomEntity), Without<OrganismSprite>>,
+    neutral_fungi: Query<
+        'w,
+        's,
+        (Entity, &'static GridPos, &'static NeutralFungusAgent),
+        Without<OrganismSprite>,
+    >,
+}
+
 pub fn organism_render_system(
     mut commands: Commands,
     sprites: Res<EntitySprites>,
-    linked_sprites: Query<(Entity, &OrganismSpriteLink), With<OrganismSprite>>,
-    fragments: Query<(Entity, &GridPos, &FragmentAgent), Without<OrganismSprite>>,
-    plants: Query<(Entity, &GridPos, &PlantRootAgent), Without<OrganismSprite>>,
-    fauna: Query<(Entity, &GridPos, &FaunaAgent), Without<OrganismSprite>>,
-    fruiting_bodies: Query<(Entity, &FruitingBody), Without<OrganismSprite>>,
-    mushrooms: Query<(Entity, &MushroomEntity), Without<OrganismSprite>>,
-    neutral_fungi: Query<(Entity, &GridPos, &NeutralFungusAgent), Without<OrganismSprite>>,
+    organisms: OrganismQueries,
     layout: Res<HexLayout>,
 ) {
     // Despawn sprites whose source entity no longer exists
-    for (sprite_entity, link) in linked_sprites.iter() {
+    for (sprite_entity, link) in organisms.linked_sprites.iter() {
         if commands.get_entity(link.0).is_err() {
             commands.entity(sprite_entity).despawn();
         }
@@ -82,7 +94,7 @@ pub fn organism_render_system(
 
     let size = organism_sprite_size(&layout);
 
-    for (source, gpos, _fragment) in fragments.iter() {
+    for (source, gpos, _fragment) in organisms.fragments.iter() {
         let world_pos = layout.hex_to_world_pos(gpos.0);
         commands.spawn((
             OrganismSprite,
@@ -97,7 +109,7 @@ pub fn organism_render_system(
         ));
     }
 
-    for (source, gpos, _plant) in plants.iter() {
+    for (source, gpos, _plant) in organisms.plants.iter() {
         let world_pos = layout.hex_to_world_pos(gpos.0);
         commands.spawn((
             OrganismSprite,
@@ -112,7 +124,7 @@ pub fn organism_render_system(
         ));
     }
 
-    for (source, gpos, _fauna_agent) in fauna.iter() {
+    for (source, gpos, _fauna_agent) in organisms.fauna.iter() {
         let world_pos = layout.hex_to_world_pos(gpos.0);
         commands.spawn((
             OrganismSprite,
@@ -127,7 +139,7 @@ pub fn organism_render_system(
         ));
     }
 
-    for (source, body) in fruiting_bodies.iter() {
+    for (source, body) in organisms.fruiting_bodies.iter() {
         let world_pos = layout.hex_to_world_pos(body.column_top);
         commands.spawn((
             OrganismSprite,
@@ -142,7 +154,7 @@ pub fn organism_render_system(
         ));
     }
 
-    for (source, mushroom) in mushrooms.iter() {
+    for (source, mushroom) in organisms.mushrooms.iter() {
         let world_pos = layout.hex_to_world_pos(mushroom.pos);
         commands.spawn((
             OrganismSprite,
@@ -157,7 +169,7 @@ pub fn organism_render_system(
         ));
     }
 
-    for (source, gpos, _fungus) in neutral_fungi.iter() {
+    for (source, gpos, _fungus) in organisms.neutral_fungi.iter() {
         let world_pos = layout.hex_to_world_pos(gpos.0);
         commands.spawn((
             OrganismSprite,

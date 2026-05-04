@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use fungai_core::{
     AbilityEffectType, ActiveAbilityEffects, ActiveEffect, MushroomEntity, RegionStates,
@@ -30,25 +31,29 @@ pub fn spawn_ability_bar(mut commands: Commands) {
     ));
 }
 
-#[allow(clippy::too_many_arguments)]
+#[derive(SystemParam)]
+pub struct AbilityBarEntities<'w, 's> {
+    bar: Query<'w, 's, Entity, With<AbilityBarRoot>>,
+    existing_buttons: Query<'w, 's, Entity, With<AbilityButton>>,
+    existing_spore: Query<'w, 's, Entity, With<SporeButton>>,
+}
+
 pub fn update_ability_bar(
     region_states: Res<RegionStates>,
     selected: Res<SelectedRegion>,
     spore_action: Res<SporeAction>,
     mushrooms: Query<&MushroomEntity>,
-    bar: Query<Entity, With<AbilityBarRoot>>,
+    entities: AbilityBarEntities,
     mut commands: Commands,
-    existing_buttons: Query<Entity, With<AbilityButton>>,
-    existing_spore: Query<Entity, With<SporeButton>>,
 ) {
-    for entity in existing_buttons.iter() {
+    for entity in entities.existing_buttons.iter() {
         commands.entity(entity).despawn();
     }
-    for entity in existing_spore.iter() {
+    for entity in entities.existing_spore.iter() {
         commands.entity(entity).despawn();
     }
 
-    let Ok(bar_entity) = bar.single() else {
+    let Ok(bar_entity) = entities.bar.single() else {
         return;
     };
 

@@ -1,3 +1,4 @@
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use fungai_core::{GameState, HintsVisible, RegionStates, SimulationSpeed};
 use fungai_input::SelectedRegion;
@@ -88,7 +89,8 @@ pub fn spawn_hud(mut commands: Commands) {
                 "WASD \u{2014} Pan camera",
                 "Scroll \u{2014} Zoom",
                 "Left click \u{2014} Select tile",
-                "Right drag \u{2014} Set growth priority",
+                "P \u{2014} Set growth priority on selected tile",
+                "Shift+P \u{2014} Clear growth priority",
                 "Space \u{2014} Pause  |  +/- Speed",
                 "1-8 \u{2014} Set specialization",
                 "H \u{2014} Hide hints",
@@ -106,7 +108,26 @@ pub fn spawn_hud(mut commands: Commands) {
         });
 }
 
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+type RegionTextFilter = (
+    With<HudRegionText>,
+    Without<HudTurnText>,
+    Without<SpeedDisplayText>,
+);
+
+type SpeedTextFilter = (
+    With<SpeedDisplayText>,
+    Without<HudTurnText>,
+    Without<HudRegionText>,
+);
+
+#[derive(SystemParam)]
+pub struct HudTexts<'w, 's> {
+    turn: Query<'w, 's, &'static mut Text, With<HudTurnText>>,
+    region: Query<'w, 's, &'static mut Text, RegionTextFilter>,
+    speed: Query<'w, 's, &'static mut Text, SpeedTextFilter>,
+    hints: Query<'w, 's, &'static mut Visibility, With<HintsPanel>>,
+}
+
 pub fn update_hud(
     game_state: Res<GameState>,
     region_states: Res<RegionStates>,
@@ -114,26 +135,9 @@ pub fn update_hud(
     speed: Res<SimulationSpeed>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut hints_visible: ResMut<HintsVisible>,
-    mut turn_text: Query<&mut Text, With<HudTurnText>>,
-    mut region_text: Query<
-        &mut Text,
-        (
-            With<HudRegionText>,
-            Without<HudTurnText>,
-            Without<SpeedDisplayText>,
-        ),
-    >,
-    mut speed_text: Query<
-        &mut Text,
-        (
-            With<SpeedDisplayText>,
-            Without<HudTurnText>,
-            Without<HudRegionText>,
-        ),
-    >,
-    mut hints_panels: Query<&mut Visibility, With<HintsPanel>>,
+    mut texts: HudTexts,
 ) {
-    if let Ok(mut text) = turn_text.single_mut() {
+    if let Ok(mut text) = texts.turn.single_mut() {
         **text = format!(
             "Turn: {} | Fragments: {}/{} | Mushrooms: {}/{}",
             game_state.turn,
@@ -144,7 +148,7 @@ pub fn update_hud(
         );
     }
 
-    if let Ok(mut text) = region_text.single_mut() {
+    if let Ok(mut text) = texts.region.single_mut() {
         let state = selected.region_id.and_then(|rid| region_states.get(rid));
 
         match state {
@@ -175,7 +179,7 @@ pub fn update_hud(
     }
 
     // Update speed display
-    if let Ok(mut text) = speed_text.single_mut() {
+    if let Ok(mut text) = texts.speed.single_mut() {
         **text = speed.label().into();
     }
 
@@ -184,7 +188,7 @@ pub fn update_hud(
         hints_visible.0 = !hints_visible.0;
     }
 
-    if let Ok(mut vis) = hints_panels.single_mut() {
+    if let Ok(mut vis) = texts.hints.single_mut() {
         *vis = if hints_visible.0 {
             Visibility::Inherited
         } else {
