@@ -21,10 +21,7 @@ pub fn slot_machine_system(
 ) {
     for event in study_messages.read() {
         let pool_options = unlock_pool_options(event.pool);
-        let selected: Vec<UnlockOption> = pool_options
-            .choose_multiple(&mut rng.0, 3)
-            .cloned()
-            .collect();
+        let selected: Vec<UnlockOption> = pool_options.sample(&mut rng.0, 3).cloned().collect();
 
         slot_messages.write(SlotMachineTriggered {
             pool: event.pool,
