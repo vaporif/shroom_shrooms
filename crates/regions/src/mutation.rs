@@ -1,6 +1,8 @@
 use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
-use fungai_core::{SlotMachineTriggered, UnlockOption};
+use fungai_core::UnlockOption;
+
+use crate::slot_machine::SlotMachineTriggered;
 
 #[derive(Resource, Default, Debug, Clone, Reflect)]
 pub struct MutationSelection {

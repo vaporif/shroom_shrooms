@@ -4,9 +4,10 @@ use bevy::ecs::message::MessageWriter;
 use bevy::prelude::*;
 use fungai_core::{
     DecompositionComplete, GridPos, GridWorld, Hex, HyphalTip, Occupant, RegionStates,
-    SlotMachineTriggered, SpecializationType, StudyComplete, Tile, TileContents, TileDiscovered,
-    UnlockPool,
+    SpecializationType, StudyComplete, Tile, TileContents, TileDiscovered, UnlockPool,
 };
+
+use crate::slot_machine::SlotMachineTriggered;
 
 const STUDY_RATE: f32 = 0.1;
 const DECOMP_RATE: f32 = 0.1;

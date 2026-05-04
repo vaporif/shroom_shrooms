@@ -1,9 +1,15 @@
-use bevy::ecs::message::{MessageReader, MessageWriter};
+use bevy::ecs::message::{Message, MessageReader, MessageWriter};
 use bevy::prelude::*;
-use fungai_core::{SlotMachineTriggered, StudyComplete, UnlockOption, UnlockPool};
-use rand::SeedableRng;
+use fungai_core::{StudyComplete, UnlockOption, UnlockPool};
 use rand::rngs::StdRng;
 use rand::seq::IndexedRandom;
+use rand::SeedableRng;
+
+#[derive(Message)]
+pub struct SlotMachineTriggered {
+    pub pool: UnlockPool,
+    pub options: Vec<UnlockOption>,
+}
 
 #[derive(Resource)]
 pub struct SlotMachineRng(pub StdRng);

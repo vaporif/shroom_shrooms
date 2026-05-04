@@ -35,7 +35,6 @@ impl Plugin for CorePlugin {
             .add_message::<StudyComplete>()
             .add_message::<DecompositionComplete>()
             .add_message::<FragmentFused>()
-            .add_message::<SlotMachineTriggered>()
             .add_message::<NeutralFungiMerged>();
     }
 }
