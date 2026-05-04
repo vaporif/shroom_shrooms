@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
+use fungai_core::SimulationSet;
 
 mod assets;
 mod atmosphere;
@@ -37,6 +38,12 @@ impl Plugin for RenderPlugin {
                     data_layer::extract_region_hulls,
                     data_layer::extract_discovery_map.after(data_layer::extract_branch_graph),
                     data_layer::extract_rival_branch_graph,
+                )
+                    .in_set(SimulationSet),
+            )
+            .add_systems(
+                Update,
+                (
                     data_layer::extract_priority_bias_map,
                     data_layer::extract_selected_region_tiles,
                 ),

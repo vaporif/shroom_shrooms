@@ -404,15 +404,15 @@ Run: `git add -A && git commit -m "move NeutralFungiMerged from core to ai"`
 
 Gating the input-driven two would make the priority-arrow overlay and selection highlight lag the cursor by up to one tick (1.0s on Normal speed). Both already have built-in `if new != old { update }` guards (`data_layer.rs:133-135, 291-293, 308-310`), so the per-frame iteration cost is bounded.
 
-- [ ] **Step 1: Read current state**
+- [x] **Step 1: Read current state**
 
 Read `crates/render/src/lib.rs`. Confirm the `Update` block matches lines 31-42 of the plan and that `SimulationSet` is not currently imported.
 
-- [ ] **Step 2: Import `SimulationSet`**
+- [x] **Step 2: Import `SimulationSet`**
 
 Add `use fungai_core::SimulationSet;` near the existing `use bevy::...` lines.
 
-- [ ] **Step 3: Split the systems tuple**
+- [x] **Step 3: Split the systems tuple**
 
 Replace the existing `.add_systems(Update, ( ... ))` block (originally `crates/render/src/lib.rs:31-42`) with two `add_systems` calls: one gated by `SimulationSet`, one ungated.
 
@@ -437,12 +437,12 @@ Replace the existing `.add_systems(Update, ( ... ))` block (originally `crates/r
 )
 ```
 
-- [ ] **Step 4: Verify build, tests, lint**
+- [x] **Step 4: Verify build, tests, lint**
 
 Run: `cargo check --workspace && cargo nextest run --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 Expected: all clean. The existing render tests in `crates/render/src/data_layer.rs:331-518` add the extract systems directly (without `SimulationSet`), so they continue to exercise the systems and stay green.
 
-- [ ] **Step 5: Add a regression test for the gate**
+- [x] **Step 5: Add a regression test for the gate**
 
 Append to the `mod tests` block at the end of `crates/render/src/data_layer.rs`. The test asserts that when the render plugin is loaded together with `SimulationSet` configured but no tick has expired yet, `BranchGraph` stays empty:
 

@@ -516,4 +516,48 @@ mod tests {
         assert_eq!(graph.nodes.len(), 3);
         assert_eq!(graph.edges.len(), 2);
     }
+
+    #[test]
+    fn extract_branch_graph_does_not_run_outside_simulation_set() {
+        use bevy::app::ScheduleRunnerPlugin;
+
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_once()));
+        app.init_resource::<GridWorld>();
+        app.init_resource::<RegionStates>();
+        app.init_resource::<BranchGraph>();
+        app.insert_resource(create_hex_layout());
+
+        app.configure_sets(Update, fungai_core::SimulationSet.run_if(|| false));
+        app.add_systems(
+            Update,
+            extract_branch_graph.in_set(fungai_core::SimulationSet),
+        );
+
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+        let pos = Hex::ZERO;
+        let e = app
+            .world_mut()
+            .spawn((
+                GridPos(pos),
+                Tile {
+                    occupant: Occupant::Player(rid),
+                    biomass: 1.0,
+                    ..default()
+                },
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<GridWorld>()
+            .tiles
+            .insert(pos, e);
+
+        app.update();
+
+        let graph = app.world().resource::<BranchGraph>();
+        assert!(graph.nodes.is_empty(), "system ran despite gate");
+    }
 }
