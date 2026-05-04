@@ -117,15 +117,6 @@ pub struct TerrainSpriteMap {
     pub sprites: HashMap<Hex, Entity>,
 }
 
-#[derive(Resource, Debug, Reflect)]
-pub struct HintsVisible(pub bool);
-
-impl Default for HintsVisible {
-    fn default() -> Self {
-        Self(true)
-    }
-}
-
 pub fn tick_advancement_system(
     time: Res<Time>,
     mut tick_timer: ResMut<TickTimer>,

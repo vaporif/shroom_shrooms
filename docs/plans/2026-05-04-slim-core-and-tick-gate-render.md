@@ -225,29 +225,29 @@ Run: `git add -A && git commit -m "move ActiveAbilityEffects from core to ui"`
 - Edit: `crates/core/src/lib.rs` (remove `init_resource::<HintsVisible>()` at `:36`)
 - Edit: `crates/ui/src/lib.rs` (register resource and re-export)
 
-- [ ] **Step 1: Map consumers**
+- [x] **Step 1: Map consumers**
 
 Run: `grep -rn "HintsVisible" /Users/vaporif/Repos/fungai/crates/ --include="*.rs"`
 Expected: `core/simulation.rs`, `core/lib.rs`, `ui/hud.rs`.
 
-- [ ] **Step 2: Move the struct + `Default` impl**
+- [x] **Step 2: Move the struct + `Default` impl**
 
 Cut `pub struct HintsVisible(pub bool);` and `impl Default for HintsVisible { fn default() -> Self { Self(true) } }` from `crates/core/src/simulation.rs:120-127` (read the file first to confirm the exact range). Paste into `crates/ui/src/hud.rs` near the top, below the existing imports. Then drop `HintsVisible` from the `use fungai_core::{ ... };` block at `hud.rs:3` — the type now lives in this same file.
 
-- [ ] **Step 3: Register in `HudPlugin`**
+- [x] **Step 3: Register in `HudPlugin`**
 
 `crates/ui/src/lib.rs`: `HudPlugin::build` (lines 21-26) currently only registers systems. Add `.init_resource::<HintsVisible>()` to its chain. Add `pub use hud::HintsVisible;` to the existing `pub use hud::{...};` line at `:13` for downstream visibility (the only other reader is the same crate, but a re-export keeps the public surface tidy).
 
-- [ ] **Step 4: Remove from core's plugin**
+- [x] **Step 4: Remove from core's plugin**
 
 Delete `.init_resource::<HintsVisible>()` from `crates/core/src/lib.rs:36`.
 
-- [ ] **Step 5: Verify build and tests**
+- [x] **Step 5: Verify build and tests**
 
 Run: `cargo check --workspace && cargo nextest run --workspace && cargo clippy --workspace --all-targets -- -D warnings`
 Expected: all clean.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run: `git add -A && git commit -m "move HintsVisible from core to ui"`
 

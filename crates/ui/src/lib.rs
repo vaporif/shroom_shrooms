@@ -10,7 +10,7 @@ pub use ability_bar::{
     ability_click_system, spawn_ability_bar, spore_button_system, update_ability_bar,
     AbilityBarRoot, AbilityButton, ActiveAbilityEffects, SporeButton,
 };
-pub use hud::{spawn_hud, update_hud};
+pub use hud::{spawn_hud, update_hud, HintsVisible};
 pub use slot_machine_ui::{
     slot_machine_selection_system, slot_machine_ui_system, SlotMachineState,
 };
@@ -20,7 +20,8 @@ pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, spawn_hud)
+        app.init_resource::<HintsVisible>()
+            .add_systems(Startup, spawn_hud)
             .add_systems(Update, update_hud);
     }
 }

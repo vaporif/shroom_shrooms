@@ -30,7 +30,6 @@ impl Plugin for CorePlugin {
             .init_resource::<SimulationSpeed>()
             .init_resource::<GamePhase>()
             .init_resource::<TerrainSpriteMap>()
-            .init_resource::<HintsVisible>()
             .init_resource::<SelectedRegion>()
             .add_message::<TurnAdvanced>()
             .add_message::<TileDiscovered>()

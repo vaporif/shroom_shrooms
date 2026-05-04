@@ -1,7 +1,16 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use fungai_core::{GameState, HintsVisible, RegionStates, SimulationSpeed};
+use fungai_core::{GameState, RegionStates, SimulationSpeed};
 use fungai_input::SelectedRegion;
+
+#[derive(Resource, Debug, Reflect)]
+pub struct HintsVisible(pub bool);
+
+impl Default for HintsVisible {
+    fn default() -> Self {
+        Self(true)
+    }
+}
 
 #[derive(Component)]
 pub struct HudRoot;
