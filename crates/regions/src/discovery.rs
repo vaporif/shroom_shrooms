@@ -26,11 +26,7 @@ pub fn explorer_discovery_system(
             continue;
         }
 
-        let positions: Vec<Hex> = std::iter::once(gpos.0)
-            .chain(grid.neighbors(gpos.0).map(|(p, _)| p))
-            .collect();
-
-        for pos in positions {
+        for pos in std::iter::once(gpos.0).chain(grid.neighbors(gpos.0).map(|(p, _)| p)) {
             let Some(&entity) = grid.tiles.get(&pos) else {
                 continue;
             };

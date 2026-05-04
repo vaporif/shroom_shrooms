@@ -59,24 +59,6 @@ pub fn catmull_rom(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, t: f32) -> Vec2 {
         + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
 }
 
-/// Map a specialization to its display color (legacy, returns Color for existing tests).
-#[cfg(test)]
-#[must_use]
-fn region_color(spec: Option<fungai_core::SpecializationType>) -> Color {
-    use fungai_core::SpecializationType;
-    match spec {
-        Some(SpecializationType::Explorer) => Color::srgb(1.0, 0.9, 0.3),
-        Some(SpecializationType::Parasite) => Color::srgb(0.8, 0.2, 0.2),
-        Some(SpecializationType::Researcher) => Color::srgb(0.3, 0.5, 0.9),
-        Some(SpecializationType::Hunter) => Color::srgb(0.6, 0.4, 0.1),
-        Some(SpecializationType::Decomposer) => Color::srgb(0.2, 0.7, 0.3),
-        Some(SpecializationType::Symbiont) => Color::srgb(0.3, 0.8, 0.8),
-        Some(SpecializationType::Infiltrator) => Color::srgb(0.6, 0.3, 0.8),
-        Some(SpecializationType::Transporter) => Color::srgb(0.9, 0.6, 0.2),
-        None => Color::srgb(0.9, 0.85, 0.7),
-    }
-}
-
 /// Map a specialization to its core color as `LinearRgba`.
 #[must_use]
 fn region_color_linear(spec: Option<fungai_core::SpecializationType>) -> LinearRgba {
@@ -327,7 +309,11 @@ fn generate_decorative_branches(
     let max_branches = if biomass < 1.0 {
         0
     } else if biomass < 3.0 {
-        if rand0 < 0.5 { 1 } else { 0 }
+        if rand0 < 0.5 {
+            1
+        } else {
+            0
+        }
     } else {
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         {
@@ -601,7 +587,7 @@ pub fn network_render_system(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fungai_core::{SpecializationType, create_hex_layout};
+    use fungai_core::{create_hex_layout, SpecializationType};
 
     #[test]
     fn catmull_rom_passes_through_control_points() {
@@ -682,17 +668,17 @@ mod tests {
 
     #[test]
     fn region_color_maps_specializations() {
-        let explorer = region_color(Some(SpecializationType::Explorer));
-        assert_eq!(explorer, Color::srgb(1.0, 0.9, 0.3));
+        let explorer = region_color_linear(Some(SpecializationType::Explorer));
+        assert_eq!(explorer, LinearRgba::new(1.0, 0.9, 0.3, 1.0));
 
-        let parasite = region_color(Some(SpecializationType::Parasite));
-        assert_eq!(parasite, Color::srgb(0.8, 0.2, 0.2));
+        let parasite = region_color_linear(Some(SpecializationType::Parasite));
+        assert_eq!(parasite, LinearRgba::new(0.8, 0.2, 0.2, 1.0));
 
-        let none_color = region_color(None);
-        assert_eq!(none_color, Color::srgb(0.9, 0.85, 0.7));
+        let none_color = region_color_linear(None);
+        assert_eq!(none_color, LinearRgba::new(0.9, 0.85, 0.7, 1.0));
 
-        let hunter = region_color(Some(SpecializationType::Hunter));
-        assert_eq!(hunter, Color::srgb(0.6, 0.4, 0.1));
+        let hunter = region_color_linear(Some(SpecializationType::Hunter));
+        assert_eq!(hunter, LinearRgba::new(0.6, 0.4, 0.1, 1.0));
     }
 
     // --- Step 1: UV attribute tests ---

@@ -77,6 +77,7 @@ pub fn region_tracking_system(
         }
     }
 
+    // Collect to drop the immutable borrow on `region_states.regions` before we mutate it below.
     let empty_rids: Vec<RegionId> = region_states
         .regions
         .iter()
