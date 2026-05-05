@@ -1,17 +1,26 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 use fungai_core::{
     BacteriaColonyAgent, FragmentAgent, FragmentId, GameState, GridPos, GridWorld, HyphalTip,
-    NeutralFungusAgent, Occupant, PlantRootAgent, RegionStates, RivalId, SpecializationType,
-    TerrainType, Tile, TileContents,
+    NeutralFungusAgent, Occupant, PlantRootAgent, RegionId, RegionStates, RivalId,
+    SpecializationType, TerrainType, Tile, TileContents,
 };
 use hexx::{Hex, HexOrientation, OffsetHexMode};
 use rand::prelude::*;
 use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
 
 const MAP_WIDTH: i32 = 80;
 const MAP_HEIGHT: i32 = 60;
+
+const ROCK_PROB: f32 = 0.08;
+const WATER_PROB: f32 = 0.04;
+const ROOT_PROB: f32 = 0.03;
+const RUIN_PROB: f32 = 0.02;
+const TOXIC_PROB: f32 = 0.01;
+
+const BACTERIA_SPREAD_INTERVAL: u32 = 10;
 
 /// Converts offset grid coordinates (col, row) to axial hex coordinates.
 /// Uses pointy-top orientation with odd-row offset, matching the project's hex layout.
@@ -28,6 +37,22 @@ impl Default for TerrainSeed {
     }
 }
 
+#[derive(Clone, Copy)]
+struct TileBase {
+    terrain: TerrainType,
+    moisture: f32,
+    nutrient_level: f32,
+}
+
+#[derive(Default)]
+struct Placements {
+    contents: HashMap<Hex, TileContents>,
+    fragments: Vec<(Hex, FragmentId)>,
+    fungi: Vec<(Hex, u32)>,
+    plants: Vec<(Hex, u32)>,
+    bacteria: Vec<Hex>,
+}
+
 pub fn terrain_generation(
     mut commands: Commands,
     mut grid: ResMut<GridWorld>,
@@ -39,136 +64,212 @@ pub fn terrain_generation(
     grid.width = MAP_WIDTH;
     grid.height = MAP_HEIGHT;
 
-    // Pass 1: precompute terrain, moisture, nutrient_level for every hex.
-    let mut tile_data: HashMap<Hex, (TerrainType, f32, f32)> = HashMap::new();
+    let mut tile_data = build_tile_data(&mut rng);
+    let mut soil_pool = build_soil_pool(&tile_data, &mut rng);
+    let mut placements =
+        place_features(&mut rng, &mut tile_data, &mut soil_pool, &mut game_state);
+
+    let player_rid = init_player_region(&mut region_states);
+    let player_start = offset_to_hex(MAP_WIDTH / 2, MAP_HEIGHT / 2);
+    let player_hexes: HashSet<Hex> = player_start.range(2).collect();
+    let rival_id = RivalId(0);
+    let rival_start = offset_to_hex(MAP_WIDTH / 4, MAP_HEIGHT / 4);
+    let rival_hexes: HashSet<Hex> = rival_start.range(1).collect();
+
+    spawn_world_tiles(
+        &mut commands,
+        &mut grid,
+        &tile_data,
+        &mut placements,
+        player_rid,
+        rival_id,
+        &player_hexes,
+        &rival_hexes,
+    );
+    spawn_agents(&mut commands, placements);
+    spawn_initial_tips(&mut commands, &grid, player_start, player_rid);
+}
+
+fn pick_terrain(rng: &mut StdRng, y: i32, depth_ratio: f32) -> TerrainType {
+    if y == MAP_HEIGHT - 1 {
+        return TerrainType::Surface;
+    }
+    if rng.random::<f32>() < ROCK_PROB * depth_ratio {
+        return TerrainType::Rock;
+    }
+    if rng.random::<f32>() < WATER_PROB {
+        return TerrainType::Water;
+    }
+    if y > MAP_HEIGHT / 2 && rng.random::<f32>() < ROOT_PROB {
+        return TerrainType::Root;
+    }
+    if rng.random::<f32>() < RUIN_PROB * depth_ratio {
+        return TerrainType::Ruin;
+    }
+    if rng.random::<f32>() < TOXIC_PROB * depth_ratio {
+        return TerrainType::Toxic;
+    }
+    TerrainType::Soil
+}
+
+fn build_tile_data(rng: &mut StdRng) -> HashMap<Hex, TileBase> {
+    let mut data = HashMap::with_capacity((MAP_WIDTH * MAP_HEIGHT) as usize);
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
             let hex = offset_to_hex(x, y);
             let depth_ratio = 1.0 - (y as f32 / MAP_HEIGHT as f32);
-            let terrain = if y == MAP_HEIGHT - 1 {
-                TerrainType::Surface
-            } else if rng.random::<f32>() < 0.08 * depth_ratio {
-                TerrainType::Rock
-            } else if rng.random::<f32>() < 0.04 {
-                TerrainType::Water
-            } else if y > MAP_HEIGHT / 2 && rng.random::<f32>() < 0.03 {
-                TerrainType::Root
-            } else if rng.random::<f32>() < 0.02 * depth_ratio {
-                TerrainType::Ruin
-            } else if rng.random::<f32>() < 0.01 * depth_ratio {
-                TerrainType::Toxic
-            } else {
-                TerrainType::Soil
-            };
-            let moisture = (0.3 + 0.5 * (y as f32 / MAP_HEIGHT as f32) + rng.random::<f32>() * 0.2)
+            let terrain = pick_terrain(rng, y, depth_ratio);
+            let moisture = (0.3
+                + 0.5 * (y as f32 / MAP_HEIGHT as f32)
+                + rng.random::<f32>() * 0.2)
                 .clamp(0.0, 1.0);
             let nutrient_level = 0.2 + rng.random::<f32>() * 0.6;
-            tile_data.insert(hex, (terrain, moisture, nutrient_level));
+            data.insert(
+                hex,
+                TileBase {
+                    terrain,
+                    moisture,
+                    nutrient_level,
+                },
+            );
         }
     }
+    data
+}
 
-    // Pass 2: pick placements on soil hexes that aren't already claimed.
-    let mut placements: HashMap<Hex, TileContents> = HashMap::new();
-    let mut terrain_overrides: HashMap<Hex, TerrainType> = HashMap::new();
-    let mut fragment_spawns: Vec<(Hex, FragmentId)> = Vec::new();
-    let mut fungus_spawns: Vec<(Hex, u32)> = Vec::new();
-    let mut plant_spawns: Vec<(Hex, u32)> = Vec::new();
-    let mut bacteria_spawns: Vec<Hex> = Vec::new();
+/// Soil hexes available for feature placement, excluding map borders and the surface row.
+fn build_soil_pool(tile_data: &HashMap<Hex, TileBase>, rng: &mut StdRng) -> Vec<Hex> {
+    let mut pool = Vec::new();
+    for y in 1..MAP_HEIGHT - 2 {
+        for x in 1..MAP_WIDTH - 1 {
+            let hex = offset_to_hex(x, y);
+            if let Some(base) = tile_data.get(&hex)
+                && base.terrain == TerrainType::Soil
+            {
+                pool.push(hex);
+            }
+        }
+    }
+    pool.shuffle(rng);
+    pool
+}
+
+fn place_features(
+    rng: &mut StdRng,
+    tile_data: &mut HashMap<Hex, TileBase>,
+    soil_pool: &mut Vec<Hex>,
+    game_state: &mut GameState,
+) -> Placements {
+    let mut p = Placements::default();
 
     let fragment_count = rng.random_range(3u32..=5);
     game_state.fragments_total = fragment_count;
     game_state.mushrooms_required = fragment_count;
     for i in 0..fragment_count {
-        let pos = random_soil_pos_pre_spawn(&tile_data, &mut rng, &placements);
-        placements.insert(pos, TileContents::Fragment(FragmentId(i)));
-        fragment_spawns.push((pos, FragmentId(i)));
+        let Some(pos) = pop_unclaimed(soil_pool, &p.contents) else {
+            break;
+        };
+        p.contents.insert(pos, TileContents::Fragment(FragmentId(i)));
+        p.fragments.push((pos, FragmentId(i)));
     }
 
-    let decomp_count = rng.random_range(3u32..=5);
-    for i in 0..decomp_count {
-        let pos = random_soil_pos_pre_spawn(&tile_data, &mut rng, &placements);
-        placements.insert(pos, TileContents::UniqueDecomposable(i));
+    for i in 0..rng.random_range(3u32..=5) {
+        let Some(pos) = pop_unclaimed(soil_pool, &p.contents) else {
+            break;
+        };
+        p.contents.insert(pos, TileContents::UniqueDecomposable(i));
     }
 
-    let fungi_count = rng.random_range(2u32..=4);
-    for i in 0..fungi_count {
-        let pos = random_soil_pos_pre_spawn(&tile_data, &mut rng, &placements);
-        placements.insert(pos, TileContents::NeutralFungus(i));
-        fungus_spawns.push((pos, i));
+    for i in 0..rng.random_range(2u32..=4) {
+        let Some(pos) = pop_unclaimed(soil_pool, &p.contents) else {
+            break;
+        };
+        p.contents.insert(pos, TileContents::NeutralFungus(i));
+        p.fungi.push((pos, i));
     }
 
-    // Roots need proximity to surface
-    let plant_count = rng.random_range(3u32..=6);
-    for i in 0..plant_count {
+    // Plants need proximity to surface; force terrain to Root regardless of base type.
+    for i in 0..rng.random_range(3u32..=6) {
         let x = rng.random_range(0..MAP_WIDTH);
         let y = rng.random_range(MAP_HEIGHT / 2..MAP_HEIGHT - 1);
         let pos = offset_to_hex(x, y);
-        if placements.contains_key(&pos) {
+        if p.contents.contains_key(&pos) {
             continue;
         }
-        placements.insert(pos, TileContents::PlantRoot(i));
-        terrain_overrides.insert(pos, TerrainType::Root);
-        plant_spawns.push((pos, i));
+        p.contents.insert(pos, TileContents::PlantRoot(i));
+        if let Some(base) = tile_data.get_mut(&pos) {
+            base.terrain = TerrainType::Root;
+        }
+        p.plants.push((pos, i));
     }
 
-    let bacteria_count = rng.random_range(1u32..=2);
-    for _ in 0..bacteria_count {
-        let pos = random_soil_pos_pre_spawn(&tile_data, &mut rng, &placements);
-        bacteria_spawns.push(pos);
+    for _ in 0..rng.random_range(1u32..=2) {
+        let Some(pos) = pop_unclaimed(soil_pool, &p.contents) else {
+            break;
+        };
+        p.bacteria.push(pos);
     }
 
-    // Fixed player/rival starting positions.
-    let player_rid = region_states.create_region();
-    if let Some(state) = region_states.get_mut(player_rid) {
+    p
+}
+
+fn pop_unclaimed(pool: &mut Vec<Hex>, claimed: &HashMap<Hex, TileContents>) -> Option<Hex> {
+    while let Some(pos) = pool.pop() {
+        if !claimed.contains_key(&pos) {
+            return Some(pos);
+        }
+    }
+    None
+}
+
+fn init_player_region(region_states: &mut RegionStates) -> RegionId {
+    let rid = region_states.create_region();
+    if let Some(state) = region_states.get_mut(rid) {
         state.nutrients = 100.0;
         state.energy = 20.0;
         state.specialization = Some(SpecializationType::Decomposer);
         state.target_specialization = Some(SpecializationType::Decomposer);
     }
-    let player_start = offset_to_hex(MAP_WIDTH / 2, MAP_HEIGHT / 2);
-    let player_hexes: Vec<Hex> = player_start.range(2).collect();
-    let rival_id = RivalId(0);
-    let rival_start = offset_to_hex(MAP_WIDTH / 4, MAP_HEIGHT / 4);
-    let rival_hexes: Vec<Hex> = rival_start.range(1).collect();
+    rid
+}
 
-    // Pass 3: spawn every tile, applying player/rival overrides where set.
+#[allow(clippy::too_many_arguments)]
+fn spawn_world_tiles(
+    commands: &mut Commands,
+    grid: &mut GridWorld,
+    tile_data: &HashMap<Hex, TileBase>,
+    placements: &mut Placements,
+    player_rid: RegionId,
+    rival_id: RivalId,
+    player_hexes: &HashSet<Hex>,
+    rival_hexes: &HashSet<Hex>,
+) {
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
             let hex = offset_to_hex(x, y);
-            let (mut terrain, moisture, nutrient_level) = tile_data[&hex];
-            if let Some(override_terrain) = terrain_overrides.get(&hex).copied() {
-                terrain = override_terrain;
-            }
+            let base = tile_data[&hex];
             let tile = if player_hexes.contains(&hex) {
                 Tile {
                     terrain: TerrainType::Soil,
                     occupant: Occupant::Player(player_rid),
                     nutrient_level: 0.8,
-                    moisture: 0.5,
                     discovered: true,
-                    contents: None,
                     biomass: 1.0,
-                    nutrient_gradient: Vec2::ZERO,
-                    priority_bias: Vec2::ZERO,
+                    ..default()
                 }
             } else if rival_hexes.contains(&hex) {
                 Tile {
                     terrain: TerrainType::Soil,
                     occupant: Occupant::Rival(rival_id),
-                    nutrient_level: 0.5,
-                    moisture: 0.5,
-                    discovered: false,
-                    contents: None,
                     biomass: 1.5,
-                    nutrient_gradient: Vec2::ZERO,
-                    priority_bias: Vec2::ZERO,
+                    ..default()
                 }
             } else {
                 Tile {
-                    terrain,
-                    nutrient_level,
-                    moisture,
-                    contents: placements.remove(&hex),
+                    terrain: base.terrain,
+                    nutrient_level: base.nutrient_level,
+                    moisture: base.moisture,
+                    contents: placements.contents.remove(&hex),
                     ..default()
                 }
             };
@@ -176,9 +277,10 @@ pub fn terrain_generation(
             grid.tiles.insert(hex, entity);
         }
     }
+}
 
-    // Pass 4: spawn agent entities (separate from the tile entities above).
-    for (pos, fid) in fragment_spawns {
+fn spawn_agents(commands: &mut Commands, p: Placements) {
+    for (pos, fid) in p.fragments {
         commands.spawn((
             GridPos(pos),
             FragmentAgent {
@@ -187,7 +289,7 @@ pub fn terrain_generation(
             },
         ));
     }
-    for (pos, fungus_id) in fungus_spawns {
+    for (pos, fungus_id) in p.fungi {
         commands.spawn((
             GridPos(pos),
             NeutralFungusAgent {
@@ -196,7 +298,7 @@ pub fn terrain_generation(
             },
         ));
     }
-    for (pos, plant_id) in plant_spawns {
+    for (pos, plant_id) in p.plants {
         commands.spawn((
             GridPos(pos),
             PlantRootAgent {
@@ -209,15 +311,23 @@ pub fn terrain_generation(
             },
         ));
     }
-    for pos in bacteria_spawns {
+    for pos in p.bacteria {
         commands.spawn((
             GridPos(pos),
             BacteriaColonyAgent {
                 spread_timer: 0,
-                spread_interval: 10,
+                spread_interval: BACTERIA_SPREAD_INTERVAL,
             },
         ));
     }
+}
+
+fn spawn_initial_tips(
+    commands: &mut Commands,
+    grid: &GridWorld,
+    player_start: Hex,
+    player_rid: RegionId,
+) {
     for neighbor in player_start.all_neighbors() {
         if grid.tiles.contains_key(&neighbor) {
             commands.spawn((
@@ -227,24 +337,6 @@ pub fn terrain_generation(
                     age: 0,
                 },
             ));
-        }
-    }
-}
-
-fn random_soil_pos_pre_spawn(
-    tile_data: &HashMap<Hex, (TerrainType, f32, f32)>,
-    rng: &mut StdRng,
-    placements: &HashMap<Hex, TileContents>,
-) -> Hex {
-    loop {
-        let x = rng.random_range(1..MAP_WIDTH - 1);
-        let y = rng.random_range(1..MAP_HEIGHT - 2);
-        let hex = offset_to_hex(x, y);
-        if placements.contains_key(&hex) {
-            continue;
-        }
-        if let Some((TerrainType::Soil, _, _)) = tile_data.get(&hex) {
-            return hex;
         }
     }
 }
