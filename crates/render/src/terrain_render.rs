@@ -59,12 +59,17 @@ pub fn terrain_type_index(terrain: TerrainType) -> u32 {
 
 /// Converts a `hexx` axial coordinate into a `bevy_ecs_tilemap` `TilePos`,
 /// preserving `OffsetHexMode::Odd` parity by routing through `to_offset_coordinates`.
-pub fn hex_to_tile_pos(hex: Hex) -> TilePos {
+/// Returns `None` if the offset coordinates are negative — `TilePos` is `u32`-indexed
+/// and a wrapping cast would point at a phantom cell far outside the grid.
+pub fn hex_to_tile_pos(hex: Hex) -> Option<TilePos> {
     let [col, row] = hex.to_offset_coordinates(OffsetHexMode::Odd, HexOrientation::Pointy);
-    TilePos {
+    if col < 0 || row < 0 {
+        return None;
+    }
+    Some(TilePos {
         x: col as u32,
         y: row as u32,
-    }
+    })
 }
 
 fn discovery_color(level: f32) -> Color {
@@ -121,14 +126,12 @@ pub fn spawn_terrain_tilemap(
         let Ok(tile) = tiles.get(entity) else {
             continue;
         };
-        let [col, row] = hex.to_offset_coordinates(OffsetHexMode::Odd, HexOrientation::Pointy);
-        if col < 0 || row < 0 || (col as u32) >= map_size.x || (row as u32) >= map_size.y {
+        let Some(tp) = hex_to_tile_pos(hex) else {
+            continue;
+        };
+        if tp.x >= map_size.x || tp.y >= map_size.y {
             continue;
         }
-        let tp = TilePos {
-            x: col as u32,
-            y: row as u32,
-        };
         let level = discovery.discovered.get(&hex).copied().unwrap_or(0.0);
         commands.entity(entity).insert(TileBundle {
             position: tp,
@@ -143,7 +146,7 @@ pub fn spawn_terrain_tilemap(
     // Compute the offset that aligns tilemap world space with hexx world space.
     // tile_pos.center_in_world is in tilemap-local space; layout.hex_to_world_pos
     // is the engine-wide truth. We translate the tilemap so they agree at H=0.
-    let zero_tp = hex_to_tile_pos(Hex::ZERO);
+    let zero_tp = hex_to_tile_pos(Hex::ZERO).expect("Hex::ZERO is in-bounds");
     let local = zero_tp.center_in_world(
         &map_size,
         &grid_size,
@@ -325,7 +328,7 @@ mod tilemap_tests {
             Hex::from_offset_coordinates([79, 59], OffsetHexMode::Odd, HexOrientation::Pointy),
         ];
         for h in samples {
-            let tp = hex_to_tile_pos(h);
+            let tp = hex_to_tile_pos(h).expect("test hex must be in-bounds");
             let back = Hex::from_offset_coordinates(
                 [tp.x as i32, tp.y as i32],
                 OffsetHexMode::Odd,
@@ -357,7 +360,7 @@ mod tilemap_tests {
         let storage = q.iter(app.world()).next().expect("TileStorage exists");
         let mut found = 0;
         for &p in &positions {
-            let tp = hex_to_tile_pos(p);
+            let tp = hex_to_tile_pos(p).expect("test hex must be in-bounds");
             if storage.get(&tp).is_some() {
                 found += 1;
             }
@@ -466,7 +469,7 @@ mod tilemap_tests {
 
         for &h in &canonical {
             let expected = layout.hex_to_world_pos(h);
-            let tp = hex_to_tile_pos(h);
+            let tp = hex_to_tile_pos(h).expect("canonical hex must be in-bounds");
             let local = tp.center_in_world(
                 &tilemap_size,
                 &grid_size,
