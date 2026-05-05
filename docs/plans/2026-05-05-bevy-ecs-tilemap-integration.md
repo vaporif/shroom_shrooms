@@ -1041,12 +1041,12 @@ git commit -m "docs: update CLAUDE.md for tilemap migration and crate rename"
 
 ## Final verification (after all tasks)
 
-- [ ] **Step 1: Full lint**
+- [x] **Step 1: Full lint**
 
 Run: `just lint`
 Expected: clean (no fmt or clippy warnings introduced).
 
-- [ ] **Step 2: Full test suite**
+- [x] **Step 2: Full test suite**
 
 Run: `just test`
 Expected: green across the workspace.
@@ -1062,7 +1062,7 @@ Verify (in the running game):
 - Pause / unpause: discovery sweeps stop while paused (no flicker on `Path 2`).
 - Hot-reload: edit `bin/assets/sprites/terrain/terrain_atlas.png` (e.g. re-run the generator with a tweaked palette) and confirm the running dev build picks up the new atlas without restart.
 
-- [ ] **Step 4: Confirm no leftover terrain-renderer artifacts**
+- [x] **Step 4: Confirm no leftover terrain-renderer artifacts**
 
 Run:
 ```
@@ -1070,7 +1070,7 @@ rg 'PlaneMeshBuilder|TerrainMaterial|TerrainUniforms|TerrainSpriteMap|terrain_re
 ```
 Expected: zero matches across the entire repo.
 
-- [ ] **Step 5: Confirm dependency closure**
+- [x] **Step 5: Confirm dependency closure**
 
 `bevy_ecs_tilemap` is a dep of `fungai_render`, not the `fungai` bin crate, so it appears at depth 1 only when querying the render crate. `image` is a feature-gated direct dep of `fungai`; with default features it should be absent from the runtime closure entirely.
 
