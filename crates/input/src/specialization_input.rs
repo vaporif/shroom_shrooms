@@ -5,8 +5,7 @@ use leafwing_input_manager::prelude::*;
 use crate::SelectedRegion;
 use crate::action::Action;
 
-/// Keys 1-8 (mapped via `Action::Spec1..Spec8`) assign a target specialization
-/// to the selected region.
+/// Keys 1-8 assign a target specialization to the selected region.
 pub fn specialization_input_system(
     actions: Res<ActionState<Action>>,
     selected: Res<SelectedRegion>,
