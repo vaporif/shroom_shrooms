@@ -1,24 +1,28 @@
 use bevy::prelude::*;
 use fungai_core::{GridPos, HexLayout, SelectedRegion, Tile};
+use leafwing_input_manager::prelude::*;
+
+use crate::action::Action;
 
 const PRIORITY_RADIUS: i32 = 3;
 
 pub fn priority_system(
-    keyboard: Res<ButtonInput<KeyCode>>,
+    actions: Res<ActionState<Action>>,
     selected: Res<SelectedRegion>,
     layout: Res<HexLayout>,
     mut tiles: Query<(&GridPos, &mut Tile)>,
 ) {
-    let shift = keyboard.pressed(KeyCode::ShiftLeft) || keyboard.pressed(KeyCode::ShiftRight);
-
-    if keyboard.just_pressed(KeyCode::KeyP) && shift {
+    // ClearPriority is the longer chord; with PrioritizeLongest clash strategy
+    // it suppresses SetPriority. Check it first as a defensive guard against
+    // strategy changes.
+    if actions.just_pressed(&Action::ClearPriority) {
         for (_gpos, mut tile) in &mut tiles {
             tile.priority_bias = Vec2::ZERO;
         }
         return;
     }
 
-    if !keyboard.just_pressed(KeyCode::KeyP) {
+    if !actions.just_pressed(&Action::SetPriority) {
         return;
     }
 
@@ -44,12 +48,18 @@ pub fn priority_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::input::InputPlugin as BevyInputPlugin;
     use fungai_core::{GridPos, GridWorld, Hex, Tile, create_hex_layout};
+
+    use crate::action::{Action, default_input_map};
 
     fn test_app() -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
-        app.init_resource::<ButtonInput<KeyCode>>();
+        app.add_plugins(BevyInputPlugin);
+        app.add_plugins(InputManagerPlugin::<Action>::default());
+        app.insert_resource(default_input_map());
+        app.init_resource::<ActionState<Action>>();
         app.init_resource::<GridWorld>();
         app.init_resource::<SelectedRegion>();
         app.insert_resource(create_hex_layout());
@@ -86,9 +96,8 @@ mod tests {
         app.world_mut()
             .resource_mut::<SelectedRegion>()
             .selected_pos = Some(target);
-        app.world_mut()
-            .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyP);
+
+        KeyCode::KeyP.press(app.world_mut());
         app.update();
 
         let tile = app.world().get::<Tile>(near_entity).expect("tile exists");
@@ -108,9 +117,8 @@ mod tests {
             .unwrap()
             .priority_bias = Vec2::new(0.5, 0.0);
 
-        let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
-        input.press(KeyCode::ShiftLeft);
-        input.press(KeyCode::KeyP);
+        KeyCode::ShiftLeft.press(app.world_mut());
+        KeyCode::KeyP.press(app.world_mut());
         app.update();
 
         let tile = app.world().get::<Tile>(entity).unwrap();
@@ -127,9 +135,7 @@ mod tests {
             .unwrap()
             .priority_bias = Vec2::new(0.5, 0.0);
 
-        app.world_mut()
-            .resource_mut::<ButtonInput<KeyCode>>()
-            .press(KeyCode::KeyP);
+        KeyCode::KeyP.press(app.world_mut());
         app.update();
 
         let tile = app.world().get::<Tile>(entity).unwrap();
