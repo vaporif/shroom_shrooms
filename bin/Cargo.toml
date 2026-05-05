@@ -6,10 +6,12 @@ license-file.workspace = true
 
 [features]
 dev = ["bevy/dynamic_linking", "bevy/hotpatching", "bevy/dev"]
+gen-atlas = ["dep:image"]
 
 [dependencies]
 bevy = { workspace = true }
 clap = { version = "4", features = ["derive"] }
+image = { workspace = true, optional = true }
 fungai_core = { workspace = true }
 fungai_world = { workspace = true }
 fungai_growth = { workspace = true }
@@ -19,3 +21,8 @@ fungai_input = { workspace = true }
 fungai_ai = { workspace = true }
 fungai_fruiting = { workspace = true }
 fungai_ui = { workspace = true }
+
+[[bin]]
+name = "gen_placeholder_atlas"
+path = "src/bin/gen_placeholder_atlas.rs"
+required-features = ["gen-atlas"]

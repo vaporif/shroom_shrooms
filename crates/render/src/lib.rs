@@ -13,6 +13,7 @@ pub use data_layer::{
     BranchGraph, DiscoveryMap, PriorityBiasMap, RegionHulls, RivalBranchGraph, TipPositions,
 };
 pub use network_render::catmull_rom;
+pub use terrain_render::{terrain_base_color, terrain_type_index};
 
 pub struct RenderPlugin;
 
