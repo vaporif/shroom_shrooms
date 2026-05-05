@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use clap::Parser;
-use fungai_core::{default_seed, LaunchConfig};
+use fungai_core::{LaunchConfig, default_seed};
 
 mod cli;
 mod plugins;

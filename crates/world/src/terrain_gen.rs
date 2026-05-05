@@ -57,8 +57,7 @@ pub fn terrain_generation(
 
     let mut tile_data = build_tile_data(&mut rng);
     let mut soil_pool = build_soil_pool(&tile_data, &mut rng);
-    let mut placements =
-        place_features(&mut rng, &mut tile_data, &mut soil_pool, &mut game_state);
+    let mut placements = place_features(&mut rng, &mut tile_data, &mut soil_pool, &mut game_state);
 
     let player_rid = init_player_region(&mut region_states);
     let player_start = offset_to_hex(MAP_WIDTH / 2, MAP_HEIGHT / 2);
@@ -110,9 +109,7 @@ fn build_tile_data(rng: &mut StdRng) -> HashMap<Hex, TileBase> {
             let hex = offset_to_hex(x, y);
             let depth_ratio = 1.0 - (y as f32 / MAP_HEIGHT as f32);
             let terrain = pick_terrain(rng, y, depth_ratio);
-            let moisture = (0.3
-                + 0.5 * (y as f32 / MAP_HEIGHT as f32)
-                + rng.random::<f32>() * 0.2)
+            let moisture = (0.3 + 0.5 * (y as f32 / MAP_HEIGHT as f32) + rng.random::<f32>() * 0.2)
                 .clamp(0.0, 1.0);
             let nutrient_level = 0.2 + rng.random::<f32>() * 0.6;
             data.insert(
@@ -160,7 +157,8 @@ fn place_features(
         let Some(pos) = pop_unclaimed(soil_pool, &p.contents) else {
             break;
         };
-        p.contents.insert(pos, TileContents::Fragment(FragmentId(i)));
+        p.contents
+            .insert(pos, TileContents::Fragment(FragmentId(i)));
         p.fragments.push((pos, FragmentId(i)));
     }
 

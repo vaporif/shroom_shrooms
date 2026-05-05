@@ -1,6 +1,6 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use fungai_core::{GameState, HintsVisible, RegionStates, SimulationSpeed};
+use fungai_core::{GameState, HintsVisible, LaunchConfig, RegionStates, SimulationSpeed};
 use fungai_input::SelectedRegion;
 
 #[derive(Component)]
@@ -127,23 +127,27 @@ pub struct HudTexts<'w, 's> {
     hints: Query<'w, 's, &'static mut Visibility, With<HintsPanel>>,
 }
 
+// Bevy systems naturally accumulate parameters; each one here is a distinct resource.
+#[allow(clippy::too_many_arguments)]
 pub fn update_hud(
     game_state: Res<GameState>,
     region_states: Res<RegionStates>,
     selected: Res<SelectedRegion>,
     speed: Res<SimulationSpeed>,
     keyboard: Res<ButtonInput<KeyCode>>,
+    config: Res<LaunchConfig>,
     mut hints_visible: ResMut<HintsVisible>,
     mut texts: HudTexts,
 ) {
     if let Ok(mut text) = texts.turn.single_mut() {
         **text = format!(
-            "Turn: {} | Fragments: {}/{} | Mushrooms: {}/{}",
+            "Turn: {} | Fragments: {}/{} | Mushrooms: {}/{} | Seed: {}",
             game_state.turn,
             game_state.fragments_fused,
             game_state.fragments_total,
             game_state.mushrooms_fruited,
             game_state.mushrooms_required,
+            config.seed,
         );
     }
 
