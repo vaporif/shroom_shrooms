@@ -965,7 +965,7 @@ git commit -m "render: switch terrain to bevy_ecs_tilemap"
 **Files:**
 - Modify: `CLAUDE.md`
 
-- [ ] **Step 1: Fix crate-name drift**
+- [x] **Step 1: Fix crate-name drift**
 
 In `CLAUDE.md`, under the "Workspace Architecture" section, update the listed crate names from `shroom_*` to `fungai_*`. The block currently lists:
 
@@ -984,7 +984,7 @@ shroom_shrooms  - Main binary: ...
 
 Replace each `shroom_*` with the actual crate name from the workspace (`fungai_core`, `fungai_world`, `fungai_growth`, `fungai_regions`, `fungai_ai`, `fungai_fruiting`, `fungai_render`, `fungai_input`, `fungai_ui`). The main binary lives in `bin/` and is the package `fungai`; update the last line to reflect that.
 
-- [ ] **Step 2: Fix the remaining `shroom_*` mentions outside the crate list**
+- [x] **Step 2: Fix the remaining `shroom_*` mentions outside the crate list**
 
 The crate prefix has leaked into two more places in `CLAUDE.md` that the workspace-architecture block alone does not cover:
 
@@ -993,7 +993,7 @@ The crate prefix has leaked into two more places in `CLAUDE.md` that the workspa
 
 Note: line 84 contains the spec filename `2026-04-19-shroom-shrooms-design.md`. That is a real path on disk (verified at `docs/superpowers/specs/2026-04-19-shroom-shrooms-design.md`); leave it untouched. The hyphenated `shroom-shrooms` slug also doesn't match the verification regex below, which scans only for the underscore-prefixed crate form.
 
-- [ ] **Step 3: Update the rendering section**
+- [x] **Step 3: Update the rendering section**
 
 In the "Rendering" section of `CLAUDE.md`, replace the description of `crates/shroom_shrooms/assets/shaders/` with the post-migration setup. The new wording:
 
@@ -1015,7 +1015,7 @@ fungi, plant roots.
 
 The wording about Catmull-Rom splines for the network stays as it is; it still applies to network rendering.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Use a regex that matches the crate-prefix form (`shroom_<word>`) but not the hyphenated `shroom-shrooms` filename slug on line 84:
 ```
@@ -1029,7 +1029,7 @@ rg 'terrain\.wgsl' CLAUDE.md
 ```
 Expected: zero matches.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 ```
