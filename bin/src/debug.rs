@@ -1,5 +1,5 @@
 use bevy::diagnostic::{
-    DiagnosticsStore, EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin,
+    DiagnosticPath, DiagnosticsStore, EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin,
     SystemInformationDiagnosticsPlugin,
 };
 use bevy::prelude::*;
@@ -27,27 +27,17 @@ fn log_diagnostics(world: &World, mut last_log: Local<f32>) {
     *last_log = now;
 
     let diagnostics = world.resource::<DiagnosticsStore>();
-    let fps = diagnostics
-        .get(&FrameTimeDiagnosticsPlugin::FPS)
-        .and_then(|d| d.smoothed())
-        .unwrap_or(0.0);
-    let frame_time_ms = diagnostics
-        .get(&FrameTimeDiagnosticsPlugin::FRAME_TIME)
-        .and_then(|d| d.smoothed())
-        .unwrap_or(0.0);
-    let entity_count = diagnostics
-        .get(&EntityCountDiagnosticsPlugin::ENTITY_COUNT)
-        .and_then(|d| d.smoothed())
-        .unwrap_or(0.0);
-    let cpu_pct = diagnostics
-        .get(&SystemInformationDiagnosticsPlugin::PROCESS_CPU_USAGE)
-        .and_then(|d| d.smoothed())
-        .unwrap_or(0.0);
-    let mem_mib = diagnostics
-        .get(&SystemInformationDiagnosticsPlugin::PROCESS_MEM_USAGE)
-        .and_then(|d| d.smoothed())
-        .unwrap_or(0.0)
-        * 1024.0;
+    let fps = smoothed(diagnostics, &FrameTimeDiagnosticsPlugin::FPS);
+    let frame_time_ms = smoothed(diagnostics, &FrameTimeDiagnosticsPlugin::FRAME_TIME);
+    let entity_count = smoothed(diagnostics, &EntityCountDiagnosticsPlugin::ENTITY_COUNT);
+    let cpu_pct = smoothed(
+        diagnostics,
+        &SystemInformationDiagnosticsPlugin::PROCESS_CPU_USAGE,
+    );
+    let mem_mib = smoothed(
+        diagnostics,
+        &SystemInformationDiagnosticsPlugin::PROCESS_MEM_USAGE,
+    ) * 1024.0;
 
     info!(
         "diag fps={fps:.1} frame_ms={frame_time_ms:.2} entities={entity_count:.0} \
@@ -91,6 +81,13 @@ fn log_diagnostics(world: &World, mut last_log: Local<f32>) {
     for (label, count) in buckets.iter().take(8) {
         info!("  archetype count={count} :: {label}");
     }
+}
+
+fn smoothed(diagnostics: &DiagnosticsStore, path: &DiagnosticPath) -> f64 {
+    diagnostics
+        .get(path)
+        .and_then(|d| d.smoothed())
+        .unwrap_or(0.0)
 }
 
 fn inspector_toggle(keys: Res<ButtonInput<KeyCode>>, mut active: Local<bool>) -> bool {
