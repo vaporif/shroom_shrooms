@@ -167,7 +167,7 @@ pub fn despawn_orphaned_organism_sprites(
 
 #[derive(Component)]
 pub struct BiasGlowMarker {
-    /// Tile entity this glow tracks. Used to despawn when its tile drops below threshold.
+    /// Source tile, so we can despawn this glow when its tile drops below threshold.
     source: Entity,
 }
 
