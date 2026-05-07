@@ -3,8 +3,12 @@ use bevy::diagnostic::{
     SystemInformationDiagnosticsPlugin,
 };
 use bevy::prelude::*;
+use bevy_egui::input::EguiWantsInput;
 use bevy_egui::{EguiGlobalSettings, EguiPlugin};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use kingdom_input::Action;
+use leafwing_input_manager::plugin::InputManagerSystem;
+use leafwing_input_manager::prelude::ActionState;
 
 pub struct DebugPlugin;
 
@@ -21,6 +25,10 @@ impl Plugin for DebugPlugin {
         });
         app.add_plugins(EguiPlugin::default());
         app.add_plugins(WorldInspectorPlugin::new().run_if(inspector_toggle));
+        app.add_systems(
+            PreUpdate,
+            gate_game_input_to_egui.in_set(InputManagerSystem::ManualControl),
+        );
         app.add_systems(Update, log_diagnostics);
     }
 }
@@ -96,9 +104,21 @@ fn smoothed(diagnostics: &DiagnosticsStore, path: &DiagnosticPath) -> f64 {
         .unwrap_or(0.0)
 }
 
+fn gate_game_input_to_egui(
+    egui_wants: Res<EguiWantsInput>,
+    mut actions: ResMut<ActionState<Action>>,
+) {
+    let egui_owns = egui_wants.wants_any_pointer_input() || egui_wants.wants_any_keyboard_input();
+    if egui_owns {
+        actions.disable();
+    } else {
+        actions.enable();
+    }
+}
+
 fn inspector_toggle(keys: Res<ButtonInput<KeyCode>>, mut active: Local<bool>) -> bool {
     let ctrl = keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight);
-    if ctrl && keys.just_pressed(KeyCode::KeyD) {
+    if ctrl && keys.just_pressed(KeyCode::KeyI) {
         *active = !*active;
     }
     *active

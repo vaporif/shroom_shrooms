@@ -4054,6 +4054,7 @@ dependencies = [
  "kingdom_render",
  "kingdom_ui",
  "kingdom_world",
+ "leafwing-input-manager",
 ]
 
 [[package]]
