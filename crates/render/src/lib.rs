@@ -50,7 +50,6 @@ impl Plugin for RenderPlugin {
                 (
                     assets::load_entity_sprites,
                     atmosphere::spawn_vignette,
-                    atmosphere::spawn_particle_pool,
                     terrain_render::spawn_terrain_tilemap.after(terrain_generation),
                 ),
             )
@@ -67,7 +66,6 @@ impl Plugin for RenderPlugin {
                     entity_render::bias_glow_render_system,
                     entity_render::region_highlight_render_system,
                     atmosphere::update_vignette,
-                    atmosphere::update_particles,
                 ),
             );
     }
