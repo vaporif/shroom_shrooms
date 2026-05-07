@@ -47,10 +47,6 @@ pub struct SelectedRegionTiles {
     pub tiles: Vec<Hex>,
 }
 
-/// Counts how many times `extract_selected_region_tiles` has run its body
-/// (post-gate). Tests read this to verify the gate actually skips frames; the
-/// resource is always present so the system can write to it without conditional
-/// system params.
 #[derive(Resource, Default, Debug)]
 pub struct SelectedRegionExtractionRuns(pub u64);
 

@@ -167,7 +167,7 @@ pub fn despawn_orphaned_organism_sprites(
 
 #[derive(Component)]
 pub struct BiasGlowMarker {
-    /// Source tile, so we can despawn this glow when its tile drops below threshold.
+    /// Tile entity this glow tracks. Used to despawn when its tile drops below threshold.
     source: Entity,
 }
 
@@ -176,51 +176,49 @@ pub fn bias_glow_render_system(
     layout: Res<HexLayout>,
     changed_tiles: Query<(Entity, &GridPos, &Tile), Changed<Tile>>,
     existing: Query<(Entity, &BiasGlowMarker)>,
-    mut existing_by_source: Local<HashMap<Entity, Entity>>,
 ) {
     if changed_tiles.is_empty() {
         return;
     }
 
-    existing_by_source.clear();
-    existing_by_source.extend(
-        existing
-            .iter()
-            .map(|(glow_e, marker)| (marker.source, glow_e)),
-    );
+    let mut existing_by_source: HashMap<Entity, Entity> =
+        HashMap::with_capacity(existing.iter().len());
+    for (glow_e, marker) in existing.iter() {
+        existing_by_source.insert(marker.source, glow_e);
+    }
 
     let quad_size = Vec2::splat(layout.scale.x * 1.6);
 
     for (tile_e, gpos, tile) in changed_tiles.iter() {
         let mag = tile.priority_bias.length();
         let visible = mag >= BIAS_GLOW_VISIBLE_THRESHOLD;
-        let existing_glow = existing_by_source.get(&tile_e).copied();
-        match (existing_glow, visible) {
+        match (existing_by_source.get(&tile_e).copied(), visible) {
             (Some(glow_e), false) => {
                 commands.entity(glow_e).despawn();
             }
             (Some(glow_e), true) => {
-                commands.entity(glow_e).insert(glow_sprite(mag, quad_size));
+                let alpha = (mag / BIAS_MAGNITUDE_CAP).min(1.0);
+                commands.entity(glow_e).insert(Sprite {
+                    color: Color::srgba(1.0, 0.7, 0.3, alpha),
+                    custom_size: Some(quad_size),
+                    ..default()
+                });
             }
             (None, true) => {
+                let alpha = (mag / BIAS_MAGNITUDE_CAP).min(1.0);
                 let world = layout.hex_to_world_pos(gpos.0);
                 commands.spawn((
                     BiasGlowMarker { source: tile_e },
-                    glow_sprite(mag, quad_size),
+                    Sprite {
+                        color: Color::srgba(1.0, 0.7, 0.3, alpha),
+                        custom_size: Some(quad_size),
+                        ..default()
+                    },
                     Transform::from_xyz(world.x, world.y, 0.7),
                 ));
             }
             (None, false) => {}
         }
-    }
-}
-
-fn glow_sprite(mag: f32, quad_size: Vec2) -> Sprite {
-    let alpha = (mag / BIAS_MAGNITUDE_CAP).min(1.0);
-    Sprite {
-        color: Color::srgba(1.0, 0.7, 0.3, alpha),
-        custom_size: Some(quad_size),
-        ..default()
     }
 }
 
