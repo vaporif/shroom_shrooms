@@ -27,7 +27,8 @@ fn main() {
             Update,
             &bevy_mod_debugdump::schedule_graph::Settings::default(),
         );
-        std::fs::write(&path, dot).expect("write schedule DOT");
+        std::fs::write(&path, dot)
+            .unwrap_or_else(|e| panic!("write schedule DOT to {}: {e}", path.display()));
         eprintln!("schedule dumped to {}", path.display());
         return;
     }
