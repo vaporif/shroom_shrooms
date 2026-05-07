@@ -22,18 +22,22 @@ impl Plugin for OrganismsPlugin {
     fn build(&self, app: &mut App) {
         // The binary registers OrganismsPlugin directly rather than going through
         // AiPlugin, so the message has to be added here — otherwise Bevy panics on
-        // the first write.
-        app.add_message::<NeutralFungiMerged>().add_systems(
-            Update,
-            (
-                neutral_fungi_system,
-                plant_system,
-                fauna_system,
-                bacteria_system,
-            )
-                .chain()
-                .in_set(AiSystems::Organisms),
-        );
+        // the first write. SimulationSystems gating must also live here for the
+        // same reason: without it `bacteria_system` runs at frame rate and bacteria
+        // colonies double every fraction of a second.
+        app.add_message::<NeutralFungiMerged>()
+            .configure_sets(Update, AiSystems::Organisms.in_set(SimulationSystems))
+            .add_systems(
+                Update,
+                (
+                    neutral_fungi_system,
+                    plant_system,
+                    fauna_system,
+                    bacteria_system,
+                )
+                    .chain()
+                    .in_set(AiSystems::Organisms),
+            );
     }
 }
 
@@ -41,10 +45,12 @@ pub struct EnvironmentPlugin;
 
 impl Plugin for EnvironmentPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<EnvironmentRng>().add_systems(
-            Update,
-            environment_threat_system.in_set(AiSystems::Environment),
-        );
+        app.init_resource::<EnvironmentRng>()
+            .configure_sets(Update, AiSystems::Environment.in_set(SimulationSystems))
+            .add_systems(
+                Update,
+                environment_threat_system.in_set(AiSystems::Environment),
+            );
     }
 }
 
