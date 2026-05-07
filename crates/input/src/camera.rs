@@ -61,9 +61,7 @@ mod tests {
 
     #[test]
     fn zoom_factor_is_multiplicative_uniform() {
-        // One scroll tick should scale by ZOOM_FACTOR_PER_TICK regardless of
-        // current scale, so a constant-input log range fully traverses [MIN, MAX]
-        // in a small, uniform number of ticks.
+        // Multiplicative zoom traverses [MIN, MAX] in log_FACTOR(MAX/MIN) ticks.
         let ticks_to_traverse = (MAX_ZOOM / MIN_ZOOM).ln() / ZOOM_FACTOR_PER_TICK.ln();
         assert!(
             ticks_to_traverse > 15.0 && ticks_to_traverse < 30.0,
