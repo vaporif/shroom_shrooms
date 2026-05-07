@@ -489,7 +489,7 @@ git commit -m "T1: strip specialization, rivals, combat, abilities, study/explor
 | `region.energy` | drop reads where possible; if needed, route to `region.sugars` |
 | `region.biomass` | `region.total_biomass` |
 
-- [ ] **Step 1: Verify baseline (T1 complete)**
+- [x] **Step 1: Verify baseline (T1 complete)**
 
 ```bash
 just lint && just test && git status
@@ -497,7 +497,7 @@ just lint && just test && git status
 
 Expected: clean tree, all green.
 
-- [ ] **Step 2: Update `crates/core/src/tile.rs`**
+- [x] **Step 2: Update `crates/core/src/tile.rs`**
 
 Replace the contents with:
 
@@ -572,7 +572,7 @@ impl Default for Tile {
 
 `RivalId` is deleted (no longer needed). `Occupant` is deleted. `nutrient_level` is renamed to `soil_richness`. `region_id` and `radiation` are new.
 
-- [ ] **Step 3: Update `crates/core/src/region.rs`**
+- [x] **Step 3: Update `crates/core/src/region.rs`**
 
 Replace `RegionState` with the final shape:
 
@@ -599,7 +599,7 @@ impl RegionState {
 }
 ```
 
-- [ ] **Step 4: Add new constants to `crates/core/src/constants.rs`**
+- [x] **Step 4: Add new constants to `crates/core/src/constants.rs`**
 
 Open the file (read its current contents first to see what's there). Append a new block:
 
@@ -639,7 +639,7 @@ pub const WISP_SENSE_RADIUS_HEX: i32 = 5;
 
 `ANASTOMOSIS_BIOMASS_BONUS` (currently used by `tip.rs`) can stay — T3 deletes its consumer.
 
-- [ ] **Step 5: Migrate `Occupant` references — start with the central files**
+- [x] **Step 5: Migrate `Occupant` references — start with the central files**
 
 Run:
 
@@ -679,7 +679,7 @@ After every file, the rule is: the call site does the *same logical thing* it di
 
 Use judgement on case-by-case basis. Mark a `// THRESHOLD-GATED` comment at any site where you applied the stronger check; it makes the T7 integration tests easier to debug if the gate behaves unexpectedly.
 
-- [ ] **Step 6: Migrate `nutrient_level` → `soil_richness` rename**
+- [x] **Step 6: Migrate `nutrient_level` → `soil_richness` rename**
 
 ```bash
 rg -l "nutrient_level" crates bin
@@ -687,7 +687,7 @@ rg -l "nutrient_level" crates bin
 
 For each file, replace `nutrient_level` with `soil_richness`. This is a pure rename — no semantic change. Common locations: `nutrient.rs`, `tip.rs`, terrain gen, render data layer.
 
-- [ ] **Step 7: Migrate `region.nutrients`, `region.energy`, `region.biomass` reads**
+- [x] **Step 7: Migrate `region.nutrients`, `region.energy`, `region.biomass` reads**
 
 ```bash
 rg "\.nutrients|\.energy|\.biomass" crates bin
@@ -701,7 +701,7 @@ Several false positives possible (especially `tile.biomass`); filter mentally. F
 
 After each file, `cargo check --workspace --all-targets` — keep green.
 
-- [ ] **Step 8: Update `crates/world/src/terrain_gen.rs` to seed radiation**
+- [x] **Step 8: Update `crates/world/src/terrain_gen.rs` to seed radiation**
 
 Read the file first. Find where each tile is initialized. After existing field assignments add radiation seeding:
 
@@ -743,7 +743,7 @@ for (pos, tile) in tile_buf.iter_mut() {
 
 The principle: deterministic-from-seed, ruins hot, 2-hex falloff. If `tile_buf` is named differently in the existing file, rename to match.
 
-- [ ] **Step 9: Verify migration compiles**
+- [x] **Step 9: Verify migration compiles**
 
 ```bash
 cargo check --workspace --all-features --all-targets
@@ -751,13 +751,13 @@ cargo check --workspace --all-features --all-targets
 
 Expected: clean. If any references to `Occupant`, `nutrient_level`, `region.nutrients`, `region.energy`, `region.biomass` remain, hunt them down.
 
-- [ ] **Step 10: Update tests in modified files**
+- [x] **Step 10: Update tests in modified files**
 
 Tests that constructed `Tile { occupant: Occupant::Player(rid), .. }` need to construct `Tile { region_id: Some(rid), biomass: 0.5, .. }` instead. Tests that asserted `tile.occupant.is_player()` change to `assert!(tile.region_id.is_some())` (or `assert_eq!(tile.region_id, Some(rid))` where the specific region matters).
 
 Touch points: `crates/growth/src/tip.rs` tests, `crates/growth/src/decay.rs` tests, `crates/regions/src/discovery.rs` test, `crates/regions/src/fragment.rs` tests, `crates/world/src/region_tracking.rs` tests, `crates/ai/src/organisms.rs` tests if any.
 
-- [ ] **Step 11: Run the full test suite**
+- [x] **Step 11: Run the full test suite**
 
 ```bash
 just test
@@ -765,7 +765,7 @@ just test
 
 Expected: pass.
 
-- [ ] **Step 12: Run lints**
+- [x] **Step 12: Run lints**
 
 ```bash
 just lint
@@ -773,7 +773,7 @@ just lint
 
 Expected: pass.
 
-- [ ] **Step 13: Smoke-test the running game**
+- [x] **Step 13: Smoke-test the running game**
 
 ```bash
 just dev
@@ -781,7 +781,7 @@ just dev
 
 Expected: game launches, terrain renders, mycelium grows from the seed via the tip system, no crashes. Quit after a few seconds.
 
-- [ ] **Step 14: Commit T2**
+- [x] **Step 14: Commit T2**
 
 ```bash
 git add -A
