@@ -20,10 +20,9 @@ pub struct OrganismsPlugin;
 
 impl Plugin for OrganismsPlugin {
     fn build(&self, app: &mut App) {
-        // NeutralFungiMerged registered here (not in AiPlugin) because step 21
-        // drops AiPlugin from the binary in favor of registering the inner plugins
-        // directly. Otherwise the message has no add_message call → Bevy panics on
-        // first write.
+        // The binary registers OrganismsPlugin directly rather than going through
+        // AiPlugin, so the message has to be added here — otherwise Bevy panics on
+        // the first write.
         app.add_message::<NeutralFungiMerged>().add_systems(
             Update,
             (
