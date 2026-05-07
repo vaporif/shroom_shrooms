@@ -71,7 +71,7 @@ pub fn density_flow_system(
     // interleave with rng.random() calls. Without this, two runs with the same
     // DensityFlowRng seed produce different outputs, breaking test reproducibility.
     let mut keys: Vec<Hex> = snapshot.keys().copied().collect();
-    keys.sort_by_key(|h| (h.x, h.y));
+    keys.sort_unstable_by_key(|h| (h.x, h.y));
 
     for pos in keys {
         let snap = snapshot[&pos];
@@ -141,10 +141,14 @@ pub fn density_flow_system(
             tile.biomass = new_biomass;
             if was_unowned
                 && new_biomass >= CLAIM_THRESHOLD
-                && let Some((&rid, _)) = delta
-                    .region_shares
-                    .iter()
-                    .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                && let Some((&rid, _)) =
+                    delta.region_shares.iter().max_by(|(rid_a, a), (rid_b, b)| {
+                        a.partial_cmp(b)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                            // Deterministic tiebreaker: smaller RegionId wins. HashMap
+                            // iteration order is otherwise nondeterministic on ties.
+                            .then_with(|| rid_b.0.cmp(&rid_a.0))
+                    })
             {
                 tile.region_id = Some(rid);
                 if !tile.discovered {
