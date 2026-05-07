@@ -128,7 +128,7 @@ Expected: PASS.
 Run: `just lint`
 Expected: no warnings.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```
 git add crates/input/src/camera.rs
@@ -480,7 +480,7 @@ pub fn extract_selected_region_tiles(
 }
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cargo nextest run -p kingdom_render`
 Expected: PASS.
@@ -537,7 +537,7 @@ Replace lines 50-58 in `crates/ui/src/tile_popover.rs`:
 Run: `cargo check -p kingdom_ui`
 Expected: clean. `Val` derives `PartialEq` in Bevy 0.18; `Text` is `pub struct Text(pub String)` with `Deref`/`DerefMut` to `String`, so `**t != payload.text` is a `String == String` comparison.
 
-- [ ] **Step 3: Add a smoke test that the system compiles and runs**
+- [x] **Step 3: Add a smoke test that the system compiles and runs**
 
 Existing `kingdom_ui` test harness is minimal. Add a unit test that constructs a `Val::Px(1.0)` and asserts `PartialEq` round-trips, just so the file has a regression sentinel:
 
@@ -554,7 +554,7 @@ mod popover_tests {
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cargo nextest run -p kingdom_ui`
 Expected: PASS.
