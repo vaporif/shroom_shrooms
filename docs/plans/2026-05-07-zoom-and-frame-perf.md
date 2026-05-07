@@ -740,12 +740,12 @@ git commit -m "perf(render): tolerate biomass drift in branch graph diff"
 
 After all five tasks land:
 
-- [ ] **Step 1: Run the full workspace test suite**
+- [x] **Step 1: Run the full workspace test suite**
 
 Run: `just test`
 Expected: PASS.
 
-- [ ] **Step 2: Run the full lint pass**
+- [x] **Step 2: Run the full lint pass**
 
 Run: `just lint`
 Expected: no warnings.
