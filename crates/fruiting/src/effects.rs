@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 use kingdom_core::{
-    GridPos, MUSHROOM_MOISTURE_BONUS, MUSHROOM_MOISTURE_RADIUS, MushroomEntity, Occupant,
+    CLAIM_THRESHOLD, GridPos, MUSHROOM_MOISTURE_BONUS, MUSHROOM_MOISTURE_RADIUS, MushroomEntity,
     RegionStates, Tile,
 };
 
-pub fn mukingdom_effect_system(
+pub fn mushroom_effect_system(
     mushrooms: Query<&MushroomEntity>,
     mut tiles: Query<(&GridPos, &mut Tile)>,
     mut region_states: ResMut<RegionStates>,
@@ -18,9 +18,12 @@ pub fn mukingdom_effect_system(
                 tile.moisture = (tile.moisture + MUSHROOM_MOISTURE_BONUS * 0.1).min(1.0);
             }
 
+            // THRESHOLD-GATED: bonus only flows to a region whose network
+            // has actually arrived at this tile, not a sub-threshold tag.
             if bonus_region.is_none()
                 && dist <= 3
-                && let Occupant::Player(rid) = tile.occupant
+                && let Some(rid) = tile.region_id
+                && tile.biomass >= CLAIM_THRESHOLD
             {
                 bonus_region = Some(rid);
             }
@@ -28,7 +31,7 @@ pub fn mukingdom_effect_system(
 
         let Some(rid) = bonus_region else { continue };
         if let Some(state) = region_states.get_mut(rid) {
-            state.nutrients += 1.0;
+            state.sugars += 1.0;
         }
     }
 }
@@ -51,10 +54,10 @@ mod tests {
     }
 
     #[test]
-    fn mukingdom_boosts_moisture_within_radius() {
+    fn mushroom_boosts_moisture_within_radius() {
         let mut app = test_app();
 
-        let mukingdom_pos = Hex::new(5, 5);
+        let mushroom_pos = Hex::new(5, 5);
         // Hex distance 2 -- well within MUSHROOM_MOISTURE_RADIUS (5)
         let near_pos = Hex::new(5, 3);
         // Hex distance 30 -- far outside
@@ -79,11 +82,11 @@ mod tests {
 
         app.world_mut().spawn(MushroomEntity {
             fragment_id: FragmentId(0),
-            pos: mukingdom_pos,
+            pos: mushroom_pos,
             vision_radius: 10.0,
         });
 
-        app.add_systems(Update, mukingdom_effect_system);
+        app.add_systems(Update, mushroom_effect_system);
         app.update();
 
         let near_tile = app.world().get::<Tile>(near_entity).expect("near tile");
@@ -102,55 +105,56 @@ mod tests {
     }
 
     #[test]
-    fn mukingdom_grants_nutrient_bonus_to_nearby_player_region() {
+    fn mushroom_grants_nutrient_bonus_to_nearby_player_region() {
         let mut app = test_app();
 
         let rid = app
             .world_mut()
             .resource_mut::<RegionStates>()
             .create_region();
-        let initial_nutrients = app
+        let initial_sugars = app
             .world()
             .resource::<RegionStates>()
             .get(rid)
             .expect("region")
-            .nutrients;
+            .sugars;
 
-        let mukingdom_pos = Hex::new(5, 5);
+        let mushroom_pos = Hex::new(5, 5);
         // Place a player tile at a hex neighbor (distance 1, within bonus radius of 3)
-        let neighbor = mukingdom_pos.all_neighbors()[0];
+        let neighbor = mushroom_pos.all_neighbors()[0];
         spawn_tile_at(
             &mut app,
             neighbor,
             Tile {
-                occupant: Occupant::Player(rid),
+                region_id: Some(rid),
+                biomass: 0.5,
                 ..default()
             },
         );
 
         app.world_mut().spawn(MushroomEntity {
             fragment_id: FragmentId(0),
-            pos: mukingdom_pos,
+            pos: mushroom_pos,
             vision_radius: 10.0,
         });
 
-        app.add_systems(Update, mukingdom_effect_system);
+        app.add_systems(Update, mushroom_effect_system);
         app.update();
 
-        let nutrients = app
+        let sugars = app
             .world()
             .resource::<RegionStates>()
             .get(rid)
             .expect("region")
-            .nutrients;
+            .sugars;
         assert!(
-            nutrients > initial_nutrients,
-            "region nutrients should increase from mushroom bonus, got {nutrients}"
+            sugars > initial_sugars,
+            "region sugars should increase from mushroom bonus, got {sugars}"
         );
     }
 
     #[test]
-    fn mukingdom_moisture_caps_at_one() {
+    fn mushroom_moisture_caps_at_one() {
         let mut app = test_app();
 
         let pos = Hex::new(5, 5);
@@ -169,7 +173,7 @@ mod tests {
             vision_radius: 10.0,
         });
 
-        app.add_systems(Update, mukingdom_effect_system);
+        app.add_systems(Update, mushroom_effect_system);
         app.update();
 
         let tile = app.world().get::<Tile>(entity).expect("tile");
@@ -184,7 +188,7 @@ mod tests {
     fn no_crash_with_no_mushrooms() {
         let mut app = test_app();
         spawn_tile_at(&mut app, Hex::ZERO, Tile::default());
-        app.add_systems(Update, mukingdom_effect_system);
+        app.add_systems(Update, mushroom_effect_system);
         app.update();
     }
 }

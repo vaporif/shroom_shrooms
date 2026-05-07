@@ -2,10 +2,14 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 use hexx::Hex;
-use kingdom_core::{
-    GridPos, GridWorld, HexLayout, HyphalTip, Occupant, RegionId, RegionStates, RivalId,
-    SelectedRegion, SpecializationType, Tile,
-};
+use kingdom_core::{GridPos, GridWorld, HexLayout, RegionId, SelectedRegion, Tile};
+
+/// Biomass drift below this threshold does not trigger a network mesh rebuild.
+/// Density flow updates biomass continuously by ~0.01-0.5 per tick; rebuilding
+/// the entire branch tree every tick costs hundreds of Mesh+Material asset
+/// inserts. Real topology changes (tiles claimed/lost) bypass this via the
+/// length and key checks.
+const NETWORK_REBUILD_BIOMASS_TOLERANCE: f32 = 0.05;
 
 #[derive(Resource, Default, Debug)]
 pub struct BranchGraph {
@@ -17,7 +21,6 @@ pub struct BranchGraph {
 pub struct BranchNode {
     pub pos: Hex,
     pub biomass: f32,
-    pub specialization: Option<SpecializationType>,
     pub region_id: RegionId,
 }
 
@@ -29,25 +32,14 @@ pub struct BranchEdge {
 }
 
 #[derive(Resource, Default, Debug)]
-pub struct TipPositions {
-    pub tips: Vec<(Hex, Option<SpecializationType>)>,
-}
-
-#[derive(Resource, Default, Debug)]
 pub struct RegionHulls {
     pub hulls: HashMap<RegionId, Vec<Vec2>>,
 }
 
 #[derive(Resource, Default, Debug)]
 pub struct DiscoveryMap {
-    /// Maps tile position to discovery level (0.0 = fully hidden, 1.0 = fully revealed).
-    /// Tiles near the network get higher values; tiles far away get lower values.
+    /// 0.0 fully hidden, 1.0 fully revealed.
     pub discovered: HashMap<Hex, f32>,
-}
-
-#[derive(Resource, Default, Debug)]
-pub struct PriorityBiasMap {
-    pub biases: HashMap<Hex, Vec2>,
 }
 
 #[derive(Resource, Default, Debug)]
@@ -56,56 +48,49 @@ pub struct SelectedRegionTiles {
 }
 
 #[derive(Resource, Default, Debug)]
-pub struct RivalBranchGraph {
-    pub nodes: HashMap<Hex, RivalBranchNode>,
-    pub edges: Vec<BranchEdge>,
-}
-
-#[derive(Debug)]
-pub struct RivalBranchNode {
-    pub pos: Hex,
-    pub biomass: f32,
-    pub rival_id: RivalId,
-}
+pub struct SelectedRegionExtractionRuns(pub u64);
 
 pub fn extract_branch_graph(
     tiles: Query<(&GridPos, &Tile)>,
     grid: Res<GridWorld>,
-    region_states: Res<RegionStates>,
     mut graph: ResMut<BranchGraph>,
+    mut node_keys: Local<Vec<Hex>>,
+    mut seen_edges: Local<HashSet<(Hex, Hex)>>,
 ) {
-    graph.nodes.clear();
-    graph.edges.clear();
-
+    let mut new_nodes: HashMap<Hex, BranchNode> = HashMap::with_capacity(graph.nodes.len());
     for (gpos, tile) in tiles.iter() {
-        if let Occupant::Player(rid) = tile.occupant {
-            let spec = region_states.get(rid).and_then(|r| r.specialization);
-            graph.nodes.insert(
+        if tile.is_owned()
+            && let Some(rid) = tile.region_id
+        {
+            new_nodes.insert(
                 gpos.0,
                 BranchNode {
                     pos: gpos.0,
                     biomass: tile.biomass,
-                    specialization: spec,
                     region_id: rid,
                 },
             );
         }
     }
 
-    let mut seen_edges: HashSet<(Hex, Hex)> = HashSet::default();
-    let node_keys: Vec<Hex> = graph.nodes.keys().copied().collect();
-    for pos in node_keys {
+    node_keys.clear();
+    node_keys.extend(new_nodes.keys().copied());
+    node_keys.sort_unstable_by_key(|h| (h.x, h.y));
+
+    seen_edges.clear();
+    let mut new_edges: Vec<BranchEdge> = Vec::with_capacity(graph.edges.len());
+    for &pos in node_keys.iter() {
         for (npos, _) in grid.neighbors(pos) {
-            if graph.nodes.contains_key(&npos) {
-                let edge_key = if pos.x < npos.x || (pos.x == npos.x && pos.y < npos.y) {
+            if new_nodes.contains_key(&npos) {
+                let edge_key = if (pos.x, pos.y) < (npos.x, npos.y) {
                     (pos, npos)
                 } else {
                     (npos, pos)
                 };
                 if seen_edges.insert(edge_key) {
-                    let from_biomass = graph.nodes[&pos].biomass;
-                    let to_biomass = graph.nodes[&npos].biomass;
-                    graph.edges.push(BranchEdge {
+                    let from_biomass = new_nodes[&pos].biomass;
+                    let to_biomass = new_nodes[&npos].biomass;
+                    new_edges.push(BranchEdge {
                         from: pos,
                         to: npos,
                         thickness: (from_biomass + to_biomass) * 0.5,
@@ -114,37 +99,46 @@ pub fn extract_branch_graph(
             }
         }
     }
+
+    if new_nodes.len() != graph.nodes.len()
+        || new_edges.len() != graph.edges.len()
+        || !nodes_match(&new_nodes, &graph.nodes)
+        || !edges_match(&new_edges, &graph.edges)
+    {
+        graph.nodes = new_nodes;
+        graph.edges = new_edges;
+    }
 }
 
-pub fn extract_tip_positions(
-    tips: Query<(&GridPos, &HyphalTip)>,
-    region_states: Res<RegionStates>,
-    mut tip_positions: ResMut<TipPositions>,
-) {
-    let new_tips: Vec<(Hex, Option<SpecializationType>)> = tips
-        .iter()
-        .map(|(gpos, tip)| {
-            let spec = region_states
-                .get(tip.region_id)
-                .and_then(|r| r.specialization);
-            (gpos.0, spec)
+fn nodes_match(a: &HashMap<Hex, BranchNode>, b: &HashMap<Hex, BranchNode>) -> bool {
+    a.iter().all(|(k, v)| {
+        b.get(k).is_some_and(|other| {
+            other.region_id == v.region_id
+                && (other.biomass - v.biomass).abs() < NETWORK_REBUILD_BIOMASS_TOLERANCE
         })
-        .collect();
-    if tip_positions.tips != new_tips {
-        tip_positions.tips = new_tips;
-    }
+    })
+}
+
+fn edges_match(a: &[BranchEdge], b: &[BranchEdge]) -> bool {
+    a.iter().zip(b.iter()).all(|(x, y)| {
+        x.from == y.from
+            && x.to == y.to
+            && (x.thickness - y.thickness).abs() < NETWORK_REBUILD_BIOMASS_TOLERANCE
+    })
 }
 
 pub fn extract_region_hulls(
     tiles: Query<(&GridPos, &Tile)>,
     layout: Res<HexLayout>,
     mut hulls: ResMut<RegionHulls>,
+    mut region_positions: Local<HashMap<RegionId, Vec<Vec2>>>,
+    mut new_hulls: Local<HashMap<RegionId, Vec<Vec2>>>,
 ) {
-    hulls.hulls.clear();
-
-    let mut region_positions: HashMap<RegionId, Vec<Vec2>> = HashMap::default();
+    for v in region_positions.values_mut() {
+        v.clear();
+    }
     for (gpos, tile) in tiles.iter() {
-        if let Occupant::Player(rid) = tile.occupant {
+        if let Some(rid) = tile.region_id {
             region_positions
                 .entry(rid)
                 .or_default()
@@ -152,9 +146,13 @@ pub fn extract_region_hulls(
         }
     }
 
-    for (rid, positions) in region_positions {
+    new_hulls.clear();
+    for (rid, positions) in region_positions.iter() {
+        if positions.is_empty() {
+            continue;
+        }
         if positions.len() < 2 {
-            hulls.hulls.insert(rid, positions);
+            new_hulls.insert(*rid, positions.clone());
             continue;
         }
         let min_x = positions.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
@@ -167,8 +165,8 @@ pub fn extract_region_hulls(
             .iter()
             .map(|p| p.y)
             .fold(f32::NEG_INFINITY, f32::max);
-        hulls.hulls.insert(
-            rid,
+        new_hulls.insert(
+            *rid,
             vec![
                 Vec2::new(min_x - 0.5, min_y - 0.5),
                 Vec2::new(max_x + 0.5, min_y - 0.5),
@@ -177,131 +175,87 @@ pub fn extract_region_hulls(
             ],
         );
     }
+
+    region_positions.retain(|_, v| !v.is_empty());
+
+    if !hulls_match(&new_hulls, &hulls.hulls) {
+        hulls.hulls.clone_from(&new_hulls);
+    }
 }
 
-pub fn extract_discovery_map(graph: Res<BranchGraph>, mut discovery: ResMut<DiscoveryMap>) {
-    discovery.discovered.clear();
+fn hulls_match(a: &HashMap<RegionId, Vec<Vec2>>, b: &HashMap<RegionId, Vec<Vec2>>) -> bool {
+    a.len() == b.len() && a.iter().all(|(k, v)| b.get(k) == Some(v))
+}
 
-    let radius: u32 = 8;
-    let fully_hidden_threshold: f32 = 0.02;
-    let fully_visible_threshold: f32 = 0.12;
+pub fn extract_discovery_map(
+    graph: Res<BranchGraph>,
+    mut discovery: ResMut<DiscoveryMap>,
+    mut influence_map: Local<HashMap<Hex, f32>>,
+    mut new_discovered: Local<HashMap<Hex, f32>>,
+) {
+    if !graph.is_changed() {
+        return;
+    }
 
-    let mut influence_map: HashMap<Hex, f32> = HashMap::new();
+    const RADIUS: u32 = 8;
+    const FULLY_HIDDEN: f32 = 0.02;
+    const FULLY_VISIBLE: f32 = 0.12;
 
-    // Network tiles are always fully visible
+    influence_map.clear();
     for &node_pos in graph.nodes.keys() {
         influence_map.insert(node_pos, f32::MAX);
     }
 
     for &node_pos in graph.nodes.keys() {
-        // Use hex range iteration instead of rectangular dx/dy loops
-        for tile in node_pos.range(radius) {
-            // Skip tiles that are network nodes -- already fully visible
+        for tile in node_pos.range(RADIUS) {
             if graph.nodes.contains_key(&tile) {
                 continue;
             }
-
             let hex_dist = tile.unsigned_distance_to(node_pos) as f32;
-
-            // Noise jitter on the effective distance to break up the boundary
             let noise = (tile.x.wrapping_mul(73_856_093) ^ tile.y.wrapping_mul(19_349_663)) as f32
                 / (i32::MAX as f32);
-            let jittered_dist = hex_dist + noise * 1.5;
-
-            if jittered_dist > radius as f32 {
+            if hex_dist + noise * 1.5 > RADIUS as f32 {
                 continue;
             }
-
             let influence = 1.0 / (hex_dist * hex_dist + 1.0);
             *influence_map.entry(tile).or_default() += influence;
         }
     }
 
-    for (tile, influence) in &influence_map {
-        let discovered = if *influence <= fully_hidden_threshold {
+    new_discovered.clear();
+    for (tile, influence) in influence_map.iter() {
+        let discovered = if *influence <= FULLY_HIDDEN {
             0.0
-        } else if *influence >= fully_visible_threshold {
+        } else if *influence >= FULLY_VISIBLE {
             1.0
         } else {
-            (*influence - fully_hidden_threshold)
-                / (fully_visible_threshold - fully_hidden_threshold)
+            (*influence - FULLY_HIDDEN) / (FULLY_VISIBLE - FULLY_HIDDEN)
         };
-
         if discovered > 0.0 {
-            discovery.discovered.insert(*tile, discovered);
-        }
-    }
-}
-
-pub fn extract_rival_branch_graph(
-    tiles: Query<(&GridPos, &Tile)>,
-    grid: Res<GridWorld>,
-    mut graph: ResMut<RivalBranchGraph>,
-) {
-    graph.nodes.clear();
-    graph.edges.clear();
-
-    for (gpos, tile) in tiles.iter() {
-        if let Occupant::Rival(rid) = tile.occupant {
-            graph.nodes.insert(
-                gpos.0,
-                RivalBranchNode {
-                    pos: gpos.0,
-                    biomass: tile.biomass,
-                    rival_id: rid,
-                },
-            );
+            new_discovered.insert(*tile, discovered);
         }
     }
 
-    let mut seen_edges: HashSet<(Hex, Hex)> = HashSet::default();
-    let node_keys: Vec<Hex> = graph.nodes.keys().copied().collect();
-    for pos in node_keys {
-        for (npos, _) in grid.neighbors(pos) {
-            if graph.nodes.contains_key(&npos) {
-                let edge_key = if pos.x < npos.x || (pos.x == npos.x && pos.y < npos.y) {
-                    (pos, npos)
-                } else {
-                    (npos, pos)
-                };
-                if seen_edges.insert(edge_key) {
-                    let from_biomass = graph.nodes[&pos].biomass;
-                    let to_biomass = graph.nodes[&npos].biomass;
-                    graph.edges.push(BranchEdge {
-                        from: pos,
-                        to: npos,
-                        thickness: (from_biomass + to_biomass) * 0.5,
-                    });
-                }
-            }
-        }
-    }
-}
-
-pub fn extract_priority_bias_map(
-    tiles: Query<(&GridPos, &Tile)>,
-    mut bias_map: ResMut<PriorityBiasMap>,
-) {
-    let new_biases: HashMap<Hex, Vec2> = tiles
-        .iter()
-        .filter_map(|(gpos, tile)| {
-            (tile.priority_bias.length_squared() > 0.001).then_some((gpos.0, tile.priority_bias))
-        })
-        .collect();
-    if bias_map.biases != new_biases {
-        bias_map.biases = new_biases;
+    if discovery.discovered != *new_discovered {
+        discovery.discovered.clone_from(&new_discovered);
     }
 }
 
 pub fn extract_selected_region_tiles(
     tiles: Query<(&GridPos, &Tile)>,
+    changed: Query<(), Changed<Tile>>,
     selected: Res<SelectedRegion>,
     mut selected_tiles: ResMut<SelectedRegionTiles>,
+    mut runs: ResMut<SelectedRegionExtractionRuns>,
 ) {
+    if !selected.is_changed() && changed.is_empty() {
+        return;
+    }
+    runs.0 += 1;
     let new_tiles: Vec<Hex> = match selected.region_id {
         Some(rid) => tiles
             .iter()
-            .filter_map(|(gpos, tile)| (tile.occupant.region_id() == Some(rid)).then_some(gpos.0))
+            .filter_map(|(gpos, tile)| (tile.region_id == Some(rid)).then_some(gpos.0))
             .collect(),
         None => Vec::new(),
     };
@@ -312,7 +266,7 @@ pub fn extract_selected_region_tiles(
 
 #[cfg(test)]
 mod tests {
-    use kingdom_core::create_hex_layout;
+    use kingdom_core::{RegionStates, create_hex_layout};
 
     use super::*;
 
@@ -322,8 +276,8 @@ mod tests {
         app.init_resource::<GridWorld>();
         app.init_resource::<RegionStates>();
         app.init_resource::<BranchGraph>();
-        app.init_resource::<TipPositions>();
         app.init_resource::<RegionHulls>();
+        app.init_resource::<SelectedRegionExtractionRuns>();
         app.insert_resource(create_hex_layout());
         app
     }
@@ -343,7 +297,7 @@ mod tests {
                 .spawn((
                     GridPos(pos),
                     Tile {
-                        occupant: Occupant::Player(rid),
+                        region_id: Some(rid),
                         biomass: 1.0,
                         ..default()
                     },
@@ -364,31 +318,6 @@ mod tests {
     }
 
     #[test]
-    fn tip_positions_extracts_tips() {
-        let mut app = test_app();
-        let rid = app
-            .world_mut()
-            .resource_mut::<RegionStates>()
-            .create_region();
-
-        let pos = Hex::new(5, 5);
-        app.world_mut().spawn((
-            GridPos(pos),
-            HyphalTip {
-                region_id: rid,
-                age: 0,
-            },
-        ));
-
-        app.add_systems(Update, extract_tip_positions);
-        app.update();
-
-        let tips = app.world().resource::<TipPositions>();
-        assert_eq!(tips.tips.len(), 1);
-        assert_eq!(tips.tips[0].0, pos);
-    }
-
-    #[test]
     fn region_hulls_produces_bounding_box() {
         let mut app = test_app();
         let rid = app
@@ -402,7 +331,7 @@ mod tests {
                 app.world_mut().spawn((
                     GridPos(pos),
                     Tile {
-                        occupant: Occupant::Player(rid),
+                        region_id: Some(rid),
                         ..default()
                     },
                 ));
@@ -434,7 +363,7 @@ mod tests {
             .spawn((
                 GridPos(pos),
                 Tile {
-                    occupant: Occupant::Player(rid),
+                    region_id: Some(rid),
                     biomass: 1.0,
                     ..default()
                 },
@@ -485,39 +414,6 @@ mod tests {
     }
 
     #[test]
-    fn rival_branch_graph_extracts_rival_tiles() {
-        let mut app = test_app();
-        app.init_resource::<RivalBranchGraph>();
-
-        let rival_id = RivalId(0);
-        for q in 0..3 {
-            let pos = Hex::new(q, 5);
-            let e = app
-                .world_mut()
-                .spawn((
-                    GridPos(pos),
-                    Tile {
-                        occupant: Occupant::Rival(rival_id),
-                        biomass: 1.0,
-                        ..default()
-                    },
-                ))
-                .id();
-            app.world_mut()
-                .resource_mut::<GridWorld>()
-                .tiles
-                .insert(pos, e);
-        }
-
-        app.add_systems(Update, extract_rival_branch_graph);
-        app.update();
-
-        let graph = app.world().resource::<RivalBranchGraph>();
-        assert_eq!(graph.nodes.len(), 3);
-        assert_eq!(graph.edges.len(), 2);
-    }
-
-    #[test]
     fn extract_branch_graph_does_not_run_outside_simulation_set() {
         use kingdom_core::SimulationSystems;
 
@@ -535,7 +431,7 @@ mod tests {
             .spawn((
                 GridPos(pos),
                 Tile {
-                    occupant: Occupant::Player(rid),
+                    region_id: Some(rid),
                     biomass: 1.0,
                     ..default()
                 },
@@ -550,5 +446,139 @@ mod tests {
 
         let graph = app.world().resource::<BranchGraph>();
         assert!(graph.nodes.is_empty(), "system ran despite gate");
+    }
+
+    #[test]
+    fn small_biomass_drift_does_not_rebuild_graph() {
+        use kingdom_core::RegionStates;
+
+        let mut app = test_app();
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+        let pos = Hex::new(0, 0);
+        let e = app
+            .world_mut()
+            .spawn((
+                GridPos(pos),
+                Tile {
+                    region_id: Some(rid),
+                    biomass: 1.0,
+                    ..Default::default()
+                },
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<GridWorld>()
+            .tiles
+            .insert(pos, e);
+
+        app.add_systems(Update, extract_branch_graph);
+        app.update();
+
+        let first_tick = app.world().resource_ref::<BranchGraph>().last_changed();
+
+        app.world_mut().get_mut::<Tile>(e).unwrap().biomass = 1.0 + 0.01;
+        app.update();
+
+        let second_tick = app.world().resource_ref::<BranchGraph>().last_changed();
+        assert_eq!(
+            first_tick, second_tick,
+            "sub-tolerance biomass drift must not flag BranchGraph as changed"
+        );
+    }
+
+    #[test]
+    fn large_biomass_change_rebuilds_graph() {
+        use kingdom_core::RegionStates;
+
+        let mut app = test_app();
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+        let pos = Hex::new(0, 0);
+        let e = app
+            .world_mut()
+            .spawn((
+                GridPos(pos),
+                Tile {
+                    region_id: Some(rid),
+                    biomass: 1.0,
+                    ..Default::default()
+                },
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<GridWorld>()
+            .tiles
+            .insert(pos, e);
+
+        app.add_systems(Update, extract_branch_graph);
+        app.update();
+        let first_tick = app.world().resource_ref::<BranchGraph>().last_changed();
+
+        app.world_mut().get_mut::<Tile>(e).unwrap().biomass = 5.0;
+        app.update();
+
+        let second_tick = app.world().resource_ref::<BranchGraph>().last_changed();
+        assert_ne!(
+            first_tick, second_tick,
+            "supra-tolerance biomass change must flag BranchGraph as changed"
+        );
+    }
+
+    #[test]
+    fn selected_region_extraction_skips_when_unchanged() {
+        use kingdom_core::SelectedRegion;
+
+        let mut app = test_app();
+        app.init_resource::<SelectedRegion>();
+        app.init_resource::<SelectedRegionTiles>();
+        app.add_systems(Update, extract_selected_region_tiles);
+
+        let rid = app
+            .world_mut()
+            .resource_mut::<kingdom_core::RegionStates>()
+            .create_region();
+        let pos = Hex::new(2, 2);
+        let e = app
+            .world_mut()
+            .spawn((
+                GridPos(pos),
+                Tile {
+                    region_id: Some(rid),
+                    ..Default::default()
+                },
+            ))
+            .id();
+        app.world_mut()
+            .resource_mut::<GridWorld>()
+            .tiles
+            .insert(pos, e);
+        app.world_mut().resource_mut::<SelectedRegion>().region_id = Some(rid);
+
+        app.update();
+        let runs_after_frame_1 = app.world().resource::<SelectedRegionExtractionRuns>().0;
+        assert_eq!(
+            runs_after_frame_1, 1,
+            "body should run once when SelectedRegion changed"
+        );
+
+        app.update();
+        let runs_after_frame_2 = app.world().resource::<SelectedRegionExtractionRuns>().0;
+        assert_eq!(
+            runs_after_frame_2, 1,
+            "body must not run again when no input changed"
+        );
+
+        app.world_mut().get_mut::<Tile>(e).unwrap().biomass = 0.5;
+        app.update();
+        let runs_after_frame_3 = app.world().resource::<SelectedRegionExtractionRuns>().0;
+        assert_eq!(
+            runs_after_frame_3, 2,
+            "body must run again when any Tile changed"
+        );
     }
 }

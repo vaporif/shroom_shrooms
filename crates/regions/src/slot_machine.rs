@@ -1,13 +1,12 @@
 use bevy::ecs::message::{Message, MessageReader, MessageWriter};
 use bevy::prelude::*;
-use kingdom_core::{StudyComplete, UnlockOption, UnlockPool};
+use kingdom_core::{DecompositionComplete, UnlockOption, UnlockPool};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 use rand::seq::IndexedRandom;
 
 #[derive(Message)]
 pub struct SlotMachineTriggered {
-    pub pool: UnlockPool,
     pub options: Vec<UnlockOption>,
 }
 
@@ -21,18 +20,17 @@ impl Default for SlotMachineRng {
 }
 
 pub fn slot_machine_system(
-    mut study_messages: MessageReader<StudyComplete>,
+    mut decomp_messages: MessageReader<DecompositionComplete>,
     mut slot_messages: MessageWriter<SlotMachineTriggered>,
     mut rng: ResMut<SlotMachineRng>,
 ) {
-    for event in study_messages.read() {
-        let pool_options = unlock_pool_options(event.pool);
+    for event in decomp_messages.read() {
+        if !event.was_unique {
+            continue;
+        }
+        let pool_options = unlock_pool_options(UnlockPool::Decomposition);
         let selected: Vec<UnlockOption> = pool_options.sample(&mut rng.0, 3).cloned().collect();
-
-        slot_messages.write(SlotMachineTriggered {
-            pool: event.pool,
-            options: selected,
-        });
+        slot_messages.write(SlotMachineTriggered { options: selected });
     }
 }
 
@@ -106,23 +104,23 @@ fn unlock_pool_options(pool: UnlockPool) -> Vec<UnlockOption> {
         ],
         UnlockPool::Decomposition => vec![
             UnlockOption {
-                name: "Enzyme Burst+".into(),
-                description: "Enzyme burst radius doubled".into(),
+                name: "Rich Bloom".into(),
+                description: "Decomposition leaves richer soil behind".into(),
                 pool,
             },
             UnlockOption {
-                name: "Toxin Resistance".into(),
-                description: "Tips survive in Toxic terrain".into(),
+                name: "Sweet Trade".into(),
+                description: "Symbiosis with plants yields more sugars".into(),
                 pool,
             },
             UnlockOption {
-                name: "Nutrient Conversion".into(),
-                description: "Convert energy to nutrients at 2:1".into(),
+                name: "Eager Flow".into(),
+                description: "Mycelium pushes a little harder past the frontier".into(),
                 pool,
             },
             UnlockOption {
-                name: "Acid Secretion".into(),
-                description: "Dissolve Rock tiles adjacent to decomposer regions".into(),
+                name: "Hardened Hyphae".into(),
+                description: "Dry tiles cling to the network for longer before dying back".into(),
                 pool,
             },
         ],
@@ -136,45 +134,62 @@ mod tests {
     use super::*;
 
     #[test]
-    fn slot_machine_produces_three_options() {
-        let capture = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let capture_clone = capture.clone();
-
+    fn slot_machine_fires_on_unique_decomp() {
+        let captured = std::sync::Arc::new(std::sync::Mutex::new(0));
+        let captured_c = captured.clone();
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
         app.init_resource::<SlotMachineRng>();
-        app.add_message::<StudyComplete>();
+        app.add_message::<DecompositionComplete>();
         app.add_message::<SlotMachineTriggered>();
         app.add_systems(
             Update,
             (
                 slot_machine_system,
-                move |mut reader: MessageReader<SlotMachineTriggered>| {
-                    for msg in reader.read() {
-                        capture_clone
-                            .lock()
-                            .unwrap()
-                            .push((msg.pool, msg.options.len()));
+                (move |mut r: MessageReader<SlotMachineTriggered>| {
+                    for ev in r.read() {
+                        if ev.options.len() == 3 {
+                            *captured_c.lock().unwrap() += 1;
+                        }
                     }
-                },
+                }),
             )
                 .chain(),
         );
-
-        app.world_mut().write_message(StudyComplete {
+        app.world_mut().write_message(DecompositionComplete {
             pos: Hex::ZERO,
-            pool: UnlockPool::Organic,
+            was_unique: true,
         });
-
         app.update();
+        assert_eq!(*captured.lock().unwrap(), 1);
+    }
 
-        let results = capture.lock().unwrap();
-        assert_eq!(
-            results.len(),
-            1,
-            "should have received one SlotMachineTriggered"
+    #[test]
+    fn slot_machine_quiet_on_organic_decomp() {
+        let captured = std::sync::Arc::new(std::sync::Mutex::new(0));
+        let captured_c = captured.clone();
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.init_resource::<SlotMachineRng>();
+        app.add_message::<DecompositionComplete>();
+        app.add_message::<SlotMachineTriggered>();
+        app.add_systems(
+            Update,
+            (
+                slot_machine_system,
+                (move |mut r: MessageReader<SlotMachineTriggered>| {
+                    for _ in r.read() {
+                        *captured_c.lock().unwrap() += 1;
+                    }
+                }),
+            )
+                .chain(),
         );
-        assert_eq!(results[0].0, UnlockPool::Organic);
-        assert_eq!(results[0].1, 3, "should have 3 options");
+        app.world_mut().write_message(DecompositionComplete {
+            pos: Hex::ZERO,
+            was_unique: false,
+        });
+        app.update();
+        assert_eq!(*captured.lock().unwrap(), 0);
     }
 }

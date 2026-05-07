@@ -1,6 +1,6 @@
 use bevy::app::{PluginGroup, PluginGroupBuilder};
 
-use kingdom_ai::AiPlugin;
+use kingdom_ai::{EnvironmentPlugin, OrganismsPlugin};
 use kingdom_core::{CorePlugin, SimulationPlugin};
 use kingdom_fruiting::FruitingPlugin;
 use kingdom_growth::GrowthPlugin;
@@ -22,7 +22,8 @@ impl PluginGroup for KingdomPlugins {
             .add(RegionsPlugin)
             .add(RenderPlugin)
             .add(InputPlugin)
-            .add(AiPlugin)
+            .add(OrganismsPlugin)
+            .add(EnvironmentPlugin)
             .add(FruitingPlugin)
             .add(UiPlugin)
     }

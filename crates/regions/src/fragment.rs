@@ -1,6 +1,8 @@
 use bevy::ecs::message::MessageWriter;
 use bevy::prelude::*;
-use kingdom_core::{FragmentAgent, FragmentFused, GameState, GridPos, GridWorld, Tile};
+use kingdom_core::{
+    CLAIM_THRESHOLD, FragmentAgent, FragmentFused, GameState, GridPos, GridWorld, Tile,
+};
 
 pub fn fragment_system(
     mut fragments: Query<(&GridPos, &mut FragmentAgent)>,
@@ -22,7 +24,7 @@ pub fn fragment_system(
             continue;
         };
 
-        if tile.occupant.is_player() {
+        if tile.region_id.is_some() && tile.biomass >= CLAIM_THRESHOLD {
             fragment.fused = true;
             game_state.fragments_fused += 1;
             fused_messages.write(FragmentFused {
@@ -35,7 +37,7 @@ pub fn fragment_system(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kingdom_core::{FragmentId, Hex, Occupant, RegionId};
+    use kingdom_core::{FragmentId, Hex, RegionId};
 
     #[test]
     fn fragment_fuses_when_player_occupies_tile() {
@@ -53,7 +55,8 @@ mod tests {
             .spawn((
                 GridPos(pos),
                 Tile {
-                    occupant: Occupant::Player(rid),
+                    region_id: Some(rid),
+                    biomass: 0.5,
                     ..default()
                 },
             ))

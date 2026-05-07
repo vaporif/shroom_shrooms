@@ -3,9 +3,8 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use hexx::{Hex, HexOrientation, OffsetHexMode};
 use kingdom_core::{
-    BacteriaColonyAgent, FragmentAgent, FragmentId, GameState, GridPos, GridWorld, HyphalTip,
-    LaunchConfig, NeutralFungusAgent, Occupant, PlantRootAgent, RegionId, RegionStates, RivalId,
-    SpecializationType, TerrainType, Tile, TileContents,
+    BacteriaColonyAgent, FragmentAgent, FragmentId, GameState, GridPos, GridWorld, LaunchConfig,
+    NeutralFungusAgent, PlantRootAgent, RegionId, RegionStates, TerrainType, Tile, TileContents,
 };
 use rand::prelude::*;
 use rand::rngs::StdRng;
@@ -32,7 +31,7 @@ fn offset_to_hex(col: i32, row: i32) -> Hex {
 struct TileBase {
     terrain: TerrainType,
     moisture: f32,
-    nutrient_level: f32,
+    soil_richness: f32,
 }
 
 #[derive(Default)]
@@ -62,24 +61,11 @@ pub fn terrain_generation(
     let player_rid = init_player_region(&mut region_states);
     let player_start = offset_to_hex(MAP_WIDTH / 2, MAP_HEIGHT / 2);
     let player_hexes: HashSet<Hex> = player_start.range(2).collect();
-    let rival_id = RivalId(0);
-    let rival_start = offset_to_hex(MAP_WIDTH / 4, MAP_HEIGHT / 4);
-    let rival_hexes: HashSet<Hex> = rival_start.range(1).collect();
 
-    spawn_world_tiles(
-        &mut commands,
-        &mut grid,
-        &tile_data,
-        &mut placements,
-        RegionAssignment {
-            player_rid,
-            rival_id,
-            player_hexes: &player_hexes,
-            rival_hexes: &rival_hexes,
-        },
-    );
+    let mut tile_buf = build_tile_buffer(&tile_data, &mut placements, player_rid, &player_hexes);
+    seed_radiation(&mut tile_buf, &mut rng);
+    spawn_world_tiles(&mut commands, &mut grid, tile_buf);
     spawn_agents(&mut commands, placements);
-    spawn_initial_tips(&mut commands, &grid, player_start, player_rid);
 }
 
 fn pick_terrain(rng: &mut StdRng, y: i32, depth_ratio: f32) -> TerrainType {
@@ -113,13 +99,13 @@ fn build_tile_data(rng: &mut StdRng) -> HashMap<Hex, TileBase> {
             let terrain = pick_terrain(rng, y, depth_ratio);
             let moisture = (0.3 + 0.5 * (y as f32 / MAP_HEIGHT as f32) + rng.random::<f32>() * 0.2)
                 .clamp(0.0, 1.0);
-            let nutrient_level = 0.2 + rng.random::<f32>() * 0.6;
+            let soil_richness = 0.2 + rng.random::<f32>() * 0.6;
             data.insert(
                 hex,
                 TileBase {
                     terrain,
                     moisture,
-                    nutrient_level,
+                    soil_richness,
                 },
             );
         }
@@ -216,60 +202,78 @@ fn pop_unclaimed(pool: &mut Vec<Hex>, claimed: &HashMap<Hex, TileContents>) -> O
 fn init_player_region(region_states: &mut RegionStates) -> RegionId {
     let rid = region_states.create_region();
     if let Some(state) = region_states.get_mut(rid) {
-        state.nutrients = 100.0;
-        state.energy = 20.0;
-        state.specialization = Some(SpecializationType::Decomposer);
-        state.target_specialization = Some(SpecializationType::Decomposer);
+        state.sugars = 100.0;
     }
     rid
 }
 
-struct RegionAssignment<'a> {
-    player_rid: RegionId,
-    rival_id: RivalId,
-    player_hexes: &'a HashSet<Hex>,
-    rival_hexes: &'a HashSet<Hex>,
-}
-
-fn spawn_world_tiles(
-    commands: &mut Commands,
-    grid: &mut GridWorld,
+fn build_tile_buffer(
     tile_data: &HashMap<Hex, TileBase>,
     placements: &mut Placements,
-    assignment: RegionAssignment<'_>,
-) {
+    player_rid: RegionId,
+    player_hexes: &HashSet<Hex>,
+) -> Vec<(Hex, Tile)> {
+    let mut buf = Vec::with_capacity((MAP_WIDTH * MAP_HEIGHT) as usize);
     for y in 0..MAP_HEIGHT {
         for x in 0..MAP_WIDTH {
             let hex = offset_to_hex(x, y);
             let base = tile_data[&hex];
-            let tile = if assignment.player_hexes.contains(&hex) {
+            let tile = if player_hexes.contains(&hex) {
                 Tile {
                     terrain: TerrainType::Soil,
-                    occupant: Occupant::Player(assignment.player_rid),
-                    nutrient_level: 0.8,
+                    region_id: Some(player_rid),
+                    soil_richness: 0.8,
                     discovered: true,
                     biomass: 1.0,
-                    ..default()
-                }
-            } else if assignment.rival_hexes.contains(&hex) {
-                Tile {
-                    terrain: TerrainType::Soil,
-                    occupant: Occupant::Rival(assignment.rival_id),
-                    biomass: 1.5,
                     ..default()
                 }
             } else {
                 Tile {
                     terrain: base.terrain,
-                    nutrient_level: base.nutrient_level,
+                    soil_richness: base.soil_richness,
                     moisture: base.moisture,
                     contents: placements.contents.remove(&hex),
                     ..default()
                 }
             };
-            let entity = commands.spawn((GridPos(hex), tile)).id();
-            grid.tiles.insert(hex, entity);
+            buf.push((hex, tile));
         }
+    }
+    buf
+}
+
+// Radiation seeding: ruins are hot (0.6..=1.0); tiles within 2 hex of a ruin
+// receive linear falloff. Two-pass: collect ruin positions, then sweep the buffer.
+// The rng is seeded from LaunchConfig.seed so runs are deterministic.
+fn seed_radiation(tile_buf: &mut [(Hex, Tile)], rng: &mut StdRng) {
+    let ruin_positions: Vec<Hex> = tile_buf
+        .iter()
+        .filter_map(|(pos, t)| (t.terrain == TerrainType::Ruin).then_some(*pos))
+        .collect();
+
+    for (pos, tile) in tile_buf.iter_mut() {
+        if tile.terrain == TerrainType::Ruin {
+            tile.radiation = 0.6 + rng.random::<f32>() * 0.4;
+            continue;
+        }
+        let Some(nearest) = ruin_positions
+            .iter()
+            .map(|&r| pos.unsigned_distance_to(r))
+            .min()
+        else {
+            continue;
+        };
+        if nearest > 0 && nearest <= 2 {
+            let falloff = 1.0 - (nearest as f32) / 2.0;
+            tile.radiation = 0.4 * falloff;
+        }
+    }
+}
+
+fn spawn_world_tiles(commands: &mut Commands, grid: &mut GridWorld, tile_buf: Vec<(Hex, Tile)>) {
+    for (hex, tile) in tile_buf {
+        let entity = commands.spawn((GridPos(hex), tile)).id();
+        grid.tiles.insert(hex, entity);
     }
 }
 
@@ -313,25 +317,6 @@ fn spawn_agents(commands: &mut Commands, p: Placements) {
                 spread_interval: BACTERIA_SPREAD_INTERVAL,
             },
         ));
-    }
-}
-
-fn spawn_initial_tips(
-    commands: &mut Commands,
-    grid: &GridWorld,
-    player_start: Hex,
-    player_rid: RegionId,
-) {
-    for neighbor in player_start.all_neighbors() {
-        if grid.tiles.contains_key(&neighbor) {
-            commands.spawn((
-                GridPos(neighbor),
-                HyphalTip {
-                    region_id: player_rid,
-                    age: 0,
-                },
-            ));
-        }
     }
 }
 
@@ -417,10 +402,10 @@ mod tests {
             if matches!(tile.contents, Some(TileContents::Fragment(_))) {
                 fragment_count += 1;
                 assert!(
-                    (tile.nutrient_level - 0.5).abs() > f32::EPSILON
+                    (tile.soil_richness - 0.5).abs() > f32::EPSILON
                         || (tile.moisture - 0.5).abs() > f32::EPSILON,
-                    "fragment tile reset to Tile::default() — nutrient {} moisture {}",
-                    tile.nutrient_level,
+                    "fragment tile reset to Tile::default() — soil_richness {} moisture {}",
+                    tile.soil_richness,
                     tile.moisture,
                 );
             }

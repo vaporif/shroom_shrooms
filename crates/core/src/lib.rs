@@ -1,4 +1,3 @@
-mod abilities;
 mod components;
 mod config;
 mod constants;
@@ -7,8 +6,8 @@ mod messages;
 mod region;
 mod simulation;
 mod tile;
+mod unlock;
 
-pub use abilities::*;
 pub use components::*;
 pub use config::*;
 pub use constants::*;
@@ -17,6 +16,7 @@ pub use messages::*;
 pub use region::*;
 pub use simulation::*;
 pub use tile::*;
+pub use unlock::*;
 
 use bevy::prelude::*;
 
@@ -35,7 +35,6 @@ impl Plugin for CorePlugin {
             .init_resource::<SelectedRegion>()
             .add_message::<TurnAdvanced>()
             .add_message::<TileDiscovered>()
-            .add_message::<StudyComplete>()
             .add_message::<DecompositionComplete>()
             .add_message::<FragmentFused>();
     }

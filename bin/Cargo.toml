@@ -8,9 +8,13 @@ default-run = "TheFifthKingdom"
 [features]
 dev = ["bevy/dynamic_linking", "bevy/hotpatching", "bevy/dev"]
 gen-atlas = ["dep:image"]
+trace = ["bevy/trace_tracy"]
 
 [dependencies]
 bevy = { workspace = true }
+bevy_egui = "0.39"
+bevy-inspector-egui = "0.36"
+bevy_mod_debugdump = "0.15"
 clap = { version = "4", features = ["derive"] }
 image = { workspace = true, optional = true }
 kingdom_core = { workspace = true }
@@ -22,6 +26,7 @@ kingdom_input = { workspace = true }
 kingdom_ai = { workspace = true }
 kingdom_fruiting = { workspace = true }
 kingdom_ui = { workspace = true }
+leafwing-input-manager = { workspace = true }
 
 [[bin]]
 name = "TheFifthKingdom"

@@ -11,9 +11,9 @@ use bevy::{
     sprite_render::{AlphaMode2d, Material2d},
 };
 use hexx::Hex;
-use kingdom_core::{HexLayout, RegionId, RivalId};
+use kingdom_core::{HexLayout, RegionId};
 
-use crate::data_layer::{BranchEdge, BranchGraph, RivalBranchGraph};
+use crate::data_layer::{BranchEdge, BranchGraph};
 
 const SPLINE_SAMPLES: usize = 12;
 const STRANDS_PER_EDGE: usize = 3;
@@ -59,21 +59,31 @@ pub fn catmull_rom(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, t: f32) -> Vec2 {
         + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
 }
 
-/// Map a specialization to its core color as `LinearRgba`.
+/// Stable per-region color derived from `RegionId`.
 #[must_use]
-fn region_color_linear(spec: Option<kingdom_core::SpecializationType>) -> LinearRgba {
-    use kingdom_core::SpecializationType;
-    match spec {
-        Some(SpecializationType::Explorer) => LinearRgba::new(1.0, 0.9, 0.3, 1.0),
-        Some(SpecializationType::Parasite) => LinearRgba::new(0.8, 0.2, 0.2, 1.0),
-        Some(SpecializationType::Researcher) => LinearRgba::new(0.3, 0.5, 0.9, 1.0),
-        Some(SpecializationType::Hunter) => LinearRgba::new(0.6, 0.4, 0.1, 1.0),
-        Some(SpecializationType::Decomposer) => LinearRgba::new(0.2, 0.7, 0.3, 1.0),
-        Some(SpecializationType::Symbiont) => LinearRgba::new(0.3, 0.8, 0.8, 1.0),
-        Some(SpecializationType::Infiltrator) => LinearRgba::new(0.6, 0.3, 0.8, 1.0),
-        Some(SpecializationType::Transporter) => LinearRgba::new(0.9, 0.6, 0.2, 1.0),
-        None => LinearRgba::new(0.9, 0.85, 0.7, 1.0),
-    }
+fn region_color_linear(rid: RegionId) -> LinearRgba {
+    #[allow(clippy::cast_precision_loss)]
+    let hue = (rid.0 as f32 * 0.618_034).fract() * 360.0;
+    let (r, g, b) = hsl_to_rgb(hue, 0.55, 0.55);
+    LinearRgba::new(r, g, b, 1.0)
+}
+
+fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
+    let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
+    let h_p = h / 60.0;
+    let x = c * (1.0 - (h_p % 2.0 - 1.0).abs());
+    #[allow(clippy::cast_possible_truncation)]
+    let sector = h_p as i32;
+    let (r1, g1, b1) = match sector {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = l - c / 2.0;
+    (r1 + m, g1 + m, b1 + m)
 }
 
 /// Derive a muted body color from a bright core color using luminance mixing.
@@ -215,19 +225,6 @@ fn group_player_nodes_by_region(graph: &BranchGraph) -> HashMap<RegionId, Vec<(H
     for node in graph.nodes.values() {
         groups
             .entry(node.region_id)
-            .or_default()
-            .push((node.pos, node.biomass));
-    }
-    groups
-}
-
-/// Group rival nodes by rival_id, returning position and biomass pairs.
-#[must_use]
-fn group_rival_nodes_by_id(graph: &RivalBranchGraph) -> HashMap<RivalId, Vec<(Hex, f32)>> {
-    let mut groups: HashMap<RivalId, Vec<(Hex, f32)>> = HashMap::new();
-    for node in graph.nodes.values() {
-        groups
-            .entry(node.rival_id)
             .or_default()
             .push((node.pos, node.biomass));
     }
@@ -385,7 +382,7 @@ fn generate_tip_forks(
 
 /// Build all spline meshes for a branch tree from a set of nodes and edges.
 ///
-/// `max_decorative` controls decorative sub-branch count (0 for rivals).
+/// `max_decorative` controls decorative sub-branch count.
 /// `tip_fork` enables tip forking at degree-1 leaf nodes.
 #[must_use]
 fn build_branch_tree(
@@ -487,13 +484,12 @@ pub struct NetworkAssets<'w> {
 pub fn network_render_system(
     mut commands: Commands,
     graph: Res<BranchGraph>,
-    rival_graph: Res<RivalBranchGraph>,
     existing: Query<Entity, With<BranchTreeMesh>>,
     mut assets: NetworkAssets,
     time: Res<Time>,
     layout: Res<HexLayout>,
 ) {
-    if !graph.is_changed() && !rival_graph.is_changed() {
+    if !graph.is_changed() {
         return;
     }
 
@@ -503,17 +499,9 @@ pub fn network_render_system(
 
     let elapsed = time.elapsed_secs();
 
-    // --- Player network: group by region, build tree per region ---
     let player_groups = group_player_nodes_by_region(&graph);
     for (region_id, region_nodes) in &player_groups {
-        // Determine specialization from any node in this region
-        let spec = graph
-            .nodes
-            .values()
-            .find(|n| n.region_id == *region_id)
-            .and_then(|n| n.specialization);
-
-        let core = region_color_linear(spec);
+        let core = region_color_linear(*region_id);
         let body = body_color_from_core(core);
         let avg_biomass = if region_nodes.is_empty() {
             1.0
@@ -543,47 +531,12 @@ pub fn network_render_system(
             ));
         }
     }
-
-    // --- Rival network: group by rival_id, build tree without decoratives ---
-    let rival_core = LinearRgba::new(0.7, 0.1, 0.1, 1.0);
-    let rival_body = LinearRgba::new(0.3, 0.05, 0.05, 0.7);
-
-    let rival_groups = group_rival_nodes_by_id(&rival_graph);
-    for rival_nodes in rival_groups.values() {
-        let avg_biomass = if rival_nodes.is_empty() {
-            1.0
-        } else {
-            #[allow(clippy::cast_precision_loss)]
-            {
-                rival_nodes.iter().map(|(_, b)| b).sum::<f32>() / rival_nodes.len() as f32
-            }
-        };
-
-        let tree_meshes = build_branch_tree(rival_nodes, &rival_graph.edges, 0, false, &layout);
-
-        for mesh in tree_meshes {
-            commands.spawn((
-                BranchTreeMesh,
-                Mesh2d(assets.meshes.add(mesh)),
-                MeshMaterial2d(assets.materials.add(NetworkMaterial {
-                    uniforms: NetworkUniforms {
-                        core_color: rival_core,
-                        body_color: rival_body,
-                        biomass: avg_biomass,
-                        time: elapsed,
-                        _padding: Vec2::ZERO,
-                    },
-                })),
-                Transform::from_translation(Vec3::ZERO.with_z(1.0)),
-            ));
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kingdom_core::{SpecializationType, create_hex_layout};
+    use kingdom_core::create_hex_layout;
 
     #[test]
     fn catmull_rom_passes_through_control_points() {
@@ -663,18 +616,10 @@ mod tests {
     }
 
     #[test]
-    fn region_color_maps_specializations() {
-        let explorer = region_color_linear(Some(SpecializationType::Explorer));
-        assert_eq!(explorer, LinearRgba::new(1.0, 0.9, 0.3, 1.0));
-
-        let parasite = region_color_linear(Some(SpecializationType::Parasite));
-        assert_eq!(parasite, LinearRgba::new(0.8, 0.2, 0.2, 1.0));
-
-        let none_color = region_color_linear(None);
-        assert_eq!(none_color, LinearRgba::new(0.9, 0.85, 0.7, 1.0));
-
-        let hunter = region_color_linear(Some(SpecializationType::Hunter));
-        assert_eq!(hunter, LinearRgba::new(0.6, 0.4, 0.1, 1.0));
+    fn region_color_distinguishes_region_ids() {
+        let a = region_color_linear(RegionId(1));
+        let b = region_color_linear(RegionId(2));
+        assert_ne!((a.red, a.green, a.blue), (b.red, b.green, b.blue));
     }
 
     // --- Step 1: UV attribute tests ---
@@ -850,7 +795,6 @@ mod tests {
             BranchNode {
                 pos: Hex::new(0, 0),
                 biomass: 1.0,
-                specialization: None,
                 region_id: r1,
             },
         );
@@ -859,7 +803,6 @@ mod tests {
             BranchNode {
                 pos: Hex::new(1, 0),
                 biomass: 2.0,
-                specialization: None,
                 region_id: r1,
             },
         );
@@ -868,7 +811,6 @@ mod tests {
             BranchNode {
                 pos: Hex::new(5, 5),
                 biomass: 3.0,
-                specialization: None,
                 region_id: r2,
             },
         );
@@ -876,37 +818,6 @@ mod tests {
         let groups = group_player_nodes_by_region(&graph);
         assert_eq!(groups.len(), 2);
         assert_eq!(groups[&r1].len(), 2);
-        assert_eq!(groups[&r2].len(), 1);
-    }
-
-    #[test]
-    fn group_rival_nodes_by_id_groups_correctly() {
-        use crate::data_layer::RivalBranchNode;
-
-        let mut graph = RivalBranchGraph::default();
-        let r1 = RivalId(0);
-        let r2 = RivalId(1);
-
-        graph.nodes.insert(
-            Hex::new(0, 0),
-            RivalBranchNode {
-                pos: Hex::new(0, 0),
-                biomass: 1.0,
-                rival_id: r1,
-            },
-        );
-        graph.nodes.insert(
-            Hex::new(1, 0),
-            RivalBranchNode {
-                pos: Hex::new(1, 0),
-                biomass: 2.0,
-                rival_id: r2,
-            },
-        );
-
-        let groups = group_rival_nodes_by_id(&graph);
-        assert_eq!(groups.len(), 2);
-        assert_eq!(groups[&r1].len(), 1);
         assert_eq!(groups[&r2].len(), 1);
     }
 
@@ -1077,7 +988,7 @@ mod tests {
     }
 
     #[test]
-    fn build_branch_tree_no_decoratives_for_rivals() {
+    fn build_branch_tree_no_decoratives_when_disabled() {
         let layout = create_hex_layout();
         let nodes = vec![
             (Hex::new(0, 0), 3.0),

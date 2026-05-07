@@ -8,7 +8,7 @@ use crate::action::Action;
 pub struct GameCamera;
 
 const CAMERA_SPEED: f32 = 300.0;
-const ZOOM_SPEED: f32 = 0.1;
+const ZOOM_FACTOR_PER_TICK: f32 = 1.15;
 const MIN_ZOOM: f32 = 0.15;
 const MAX_ZOOM: f32 = 4.0;
 
@@ -41,7 +41,10 @@ pub fn camera_system(
     if let Projection::Orthographic(ref mut ortho) = *projection {
         let zoom_delta = actions.value(&Action::Zoom);
         if zoom_delta != 0.0 {
-            ortho.scale = (ortho.scale - zoom_delta * ZOOM_SPEED).clamp(MIN_ZOOM, MAX_ZOOM);
+            // Positive scroll → zoom in (smaller scale); use ZOOM_FACTOR^(-delta)
+            // so each tick is a uniform visual ratio change.
+            let factor = ZOOM_FACTOR_PER_TICK.powf(-zoom_delta);
+            ortho.scale = (ortho.scale * factor).clamp(MIN_ZOOM, MAX_ZOOM);
         }
     }
 }
@@ -54,5 +57,17 @@ mod tests {
     fn zoom_range_matches_spec() {
         assert_eq!(MIN_ZOOM, 0.15);
         assert_eq!(MAX_ZOOM, 4.0);
+    }
+
+    #[test]
+    fn zoom_factor_is_multiplicative_uniform() {
+        // One scroll tick should scale by ZOOM_FACTOR_PER_TICK regardless of
+        // current scale, so a constant-input log range fully traverses [MIN, MAX]
+        // in a small, uniform number of ticks.
+        let ticks_to_traverse = (MAX_ZOOM / MIN_ZOOM).ln() / ZOOM_FACTOR_PER_TICK.ln();
+        assert!(
+            ticks_to_traverse > 15.0 && ticks_to_traverse < 30.0,
+            "expected ~22 ticks to traverse range, got {ticks_to_traverse}"
+        );
     }
 }

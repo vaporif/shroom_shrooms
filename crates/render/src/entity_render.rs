@@ -1,71 +1,25 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use kingdom_core::{
-    FaunaAgent, FragmentAgent, FruitingBody, GridPos, Hex, HexLayout, MushroomEntity,
-    NeutralFungusAgent, OrganismSpriteLink, PlantRootAgent, SpecializationType,
+    BIAS_GLOW_VISIBLE_THRESHOLD, BIAS_MAGNITUDE_CAP, FaunaAgent, FragmentAgent, FruitingBody,
+    GridPos, Hex, HexLayout, MushroomEntity, NeutralFungusAgent, OrganismSpriteLink,
+    PlantRootAgent, Tile,
 };
 
 use crate::assets::EntitySprites;
-use crate::data_layer::{PriorityBiasMap, SelectedRegionTiles, TipPositions};
-
-#[derive(Component)]
-pub struct TipSprite;
+use crate::data_layer::SelectedRegionTiles;
 
 #[derive(Component)]
 pub struct OrganismSprite;
 
-/// Sprite size based on hex inner radius (apothem) at ~70% fill.
 #[must_use]
 pub fn organism_sprite_size(layout: &HexLayout) -> Vec2 {
     let inner_radius = layout.scale.x * 3.0_f32.sqrt() / 2.0;
     Vec2::splat(inner_radius * 1.4)
 }
 
-pub fn tip_render_system(
-    mut commands: Commands,
-    tip_positions: Res<TipPositions>,
-    existing: Query<Entity, With<TipSprite>>,
-    layout: Res<HexLayout>,
-) {
-    if !tip_positions.is_changed() {
-        return;
-    }
-
-    for entity in existing.iter() {
-        commands.entity(entity).despawn();
-    }
-
-    let inner_radius = layout.scale.x * 3.0_f32.sqrt() / 2.0;
-    let tip_size = Vec2::splat(inner_radius * 0.8);
-
-    for (pos, spec) in &tip_positions.tips {
-        let color = match spec {
-            Some(SpecializationType::Decomposer) => Color::srgb(0.4, 0.7, 0.3),
-            Some(SpecializationType::Explorer) => Color::srgb(1.0, 0.9, 0.3),
-            Some(SpecializationType::Parasite) => Color::srgb(0.8, 0.2, 0.2),
-            Some(SpecializationType::Researcher) => Color::srgb(0.3, 0.5, 0.9),
-            Some(SpecializationType::Hunter) => Color::srgb(0.6, 0.4, 0.1),
-            _ => Color::srgb(0.9, 0.9, 0.9),
-        };
-
-        let base_pos = layout.hex_to_world_pos(*pos);
-        let world_pos = Vec3::new(base_pos.x, base_pos.y, 2.0);
-
-        commands.spawn((
-            TipSprite,
-            Sprite {
-                color,
-                custom_size: Some(tip_size),
-                ..default()
-            },
-            Transform::from_translation(world_pos),
-        ));
-    }
-}
-
-// One `Added<T>` query per organism so each component picks its own sprite/colour.
 #[derive(SystemParam)]
 pub struct NewOrganisms<'w, 's> {
     fragments: Query<'w, 's, (Entity, &'static GridPos), Added<FragmentAgent>>,
@@ -74,6 +28,27 @@ pub struct NewOrganisms<'w, 's> {
     fruiting: Query<'w, 's, (Entity, &'static FruitingBody), Added<FruitingBody>>,
     mushrooms: Query<'w, 's, (Entity, &'static MushroomEntity), Added<MushroomEntity>>,
     neutral_fungi: Query<'w, 's, (Entity, &'static GridPos), Added<NeutralFungusAgent>>,
+}
+
+fn spawn_sprite(
+    commands: &mut Commands,
+    source: Entity,
+    image: Handle<Image>,
+    color: Color,
+    size: Vec2,
+    world_pos: Vec2,
+) {
+    commands.spawn((
+        OrganismSprite,
+        OrganismSpriteLink(source),
+        Sprite {
+            image,
+            color,
+            custom_size: Some(size),
+            ..default()
+        },
+        Transform::from_translation(world_pos.extend(2.0)),
+    ));
 }
 
 pub fn spawn_organism_sprites(
@@ -85,97 +60,78 @@ pub fn spawn_organism_sprites(
     let size = organism_sprite_size(&layout);
 
     for (source, gpos) in new_organisms.fragments.iter() {
-        let world_pos = layout.hex_to_world_pos(gpos.0);
-        commands.spawn((
-            OrganismSprite,
-            OrganismSpriteLink(source),
-            Sprite {
-                image: sprites.fragment.clone(),
-                color: Color::srgb(0.9, 0.7, 1.0),
-                custom_size: Some(size),
-                ..default()
-            },
-            Transform::from_translation(world_pos.extend(2.0)),
-        ));
+        let pos = layout.hex_to_world_pos(gpos.0);
+        spawn_sprite(
+            &mut commands,
+            source,
+            sprites.fragment.clone(),
+            Color::srgb(0.9, 0.7, 1.0),
+            size,
+            pos,
+        );
     }
 
     for (source, gpos) in new_organisms.plants.iter() {
-        let world_pos = layout.hex_to_world_pos(gpos.0);
-        commands.spawn((
-            OrganismSprite,
-            OrganismSpriteLink(source),
-            Sprite {
-                image: sprites.plant_root.clone(),
-                color: Color::srgb(0.2, 0.7, 0.3),
-                custom_size: Some(size),
-                ..default()
-            },
-            Transform::from_translation(world_pos.extend(2.0)),
-        ));
+        let pos = layout.hex_to_world_pos(gpos.0);
+        spawn_sprite(
+            &mut commands,
+            source,
+            sprites.plant_root.clone(),
+            Color::srgb(0.2, 0.7, 0.3),
+            size,
+            pos,
+        );
     }
 
     for (source, gpos) in new_organisms.fauna.iter() {
-        let world_pos = layout.hex_to_world_pos(gpos.0);
-        commands.spawn((
-            OrganismSprite,
-            OrganismSpriteLink(source),
-            Sprite {
-                image: sprites.fauna.clone(),
-                color: Color::srgb(0.7, 0.3, 0.2),
-                custom_size: Some(size),
-                ..default()
-            },
-            Transform::from_translation(world_pos.extend(2.0)),
-        ));
+        let pos = layout.hex_to_world_pos(gpos.0);
+        spawn_sprite(
+            &mut commands,
+            source,
+            sprites.fauna.clone(),
+            Color::srgb(0.7, 0.3, 0.2),
+            size,
+            pos,
+        );
     }
 
     for (source, body) in new_organisms.fruiting.iter() {
-        let world_pos = layout.hex_to_world_pos(body.column_top);
-        commands.spawn((
-            OrganismSprite,
-            OrganismSpriteLink(source),
-            Sprite {
-                image: sprites.mushroom.clone(),
-                color: Color::WHITE,
-                custom_size: Some(size),
-                ..default()
-            },
-            Transform::from_translation(world_pos.extend(2.0)),
-        ));
+        let pos = layout.hex_to_world_pos(body.column_top);
+        spawn_sprite(
+            &mut commands,
+            source,
+            sprites.mushroom.clone(),
+            Color::WHITE,
+            size,
+            pos,
+        );
     }
 
     for (source, mushroom) in new_organisms.mushrooms.iter() {
-        let world_pos = layout.hex_to_world_pos(mushroom.pos);
-        commands.spawn((
-            OrganismSprite,
-            OrganismSpriteLink(source),
-            Sprite {
-                image: sprites.mushroom.clone(),
-                color: Color::WHITE,
-                custom_size: Some(size),
-                ..default()
-            },
-            Transform::from_translation(world_pos.extend(2.0)),
-        ));
+        let pos = layout.hex_to_world_pos(mushroom.pos);
+        spawn_sprite(
+            &mut commands,
+            source,
+            sprites.mushroom.clone(),
+            Color::WHITE,
+            size,
+            pos,
+        );
     }
 
     for (source, gpos) in new_organisms.neutral_fungi.iter() {
-        let world_pos = layout.hex_to_world_pos(gpos.0);
-        commands.spawn((
-            OrganismSprite,
-            OrganismSpriteLink(source),
-            Sprite {
-                image: sprites.neutral_fungus.clone(),
-                color: Color::srgb(0.5, 0.6, 0.4),
-                custom_size: Some(size),
-                ..default()
-            },
-            Transform::from_translation(world_pos.extend(2.0)),
-        ));
+        let pos = layout.hex_to_world_pos(gpos.0);
+        spawn_sprite(
+            &mut commands,
+            source,
+            sprites.neutral_fungus.clone(),
+            Color::srgb(0.5, 0.6, 0.4),
+            size,
+            pos,
+        );
     }
 }
 
-// One `RemovedComponents<T>` per organism — they can't be merged into one param.
 #[derive(SystemParam)]
 pub struct RemovedOrganisms<'w, 's> {
     fragments: RemovedComponents<'w, 's, FragmentAgent>,
@@ -210,47 +166,64 @@ pub fn despawn_orphaned_organism_sprites(
 }
 
 #[derive(Component)]
-pub struct PriorityArrowSprite;
+pub struct BiasGlowMarker {
+    /// Tile entity this glow tracks.
+    source: Entity,
+}
 
-pub fn priority_arrow_render_system(
+pub fn bias_glow_render_system(
     mut commands: Commands,
-    bias_map: Res<PriorityBiasMap>,
-    existing: Query<Entity, With<PriorityArrowSprite>>,
     layout: Res<HexLayout>,
+    changed_tiles: Query<(Entity, &GridPos, &Tile), Changed<Tile>>,
+    existing: Query<(Entity, &BiasGlowMarker)>,
 ) {
-    if !bias_map.is_changed() {
+    if changed_tiles.is_empty() {
         return;
     }
 
-    for entity in existing.iter() {
-        commands.entity(entity).despawn();
-    }
+    let existing_by_source: HashMap<Entity, Entity> = existing
+        .iter()
+        .map(|(glow_e, marker)| (marker.source, glow_e))
+        .collect();
 
-    let inner_radius = layout.scale.x * 3.0_f32.sqrt() / 2.0;
-    let arrow_size = Vec2::new(inner_radius * 0.5, inner_radius * 0.15);
+    let quad_size = Vec2::splat(layout.scale.x * 1.6);
 
-    for (hex, bias) in &bias_map.biases {
-        let angle = bias.y.atan2(bias.x);
-        let base_pos = layout.hex_to_world_pos(*hex);
-        let offset = *bias * inner_radius * 0.3;
-        let world_pos = Vec3::new(base_pos.x + offset.x, base_pos.y + offset.y, 3.0);
-
-        commands.spawn((
-            PriorityArrowSprite,
-            Sprite {
-                color: Color::srgba(0.2, 1.0, 0.6, 0.6),
-                custom_size: Some(arrow_size),
-                ..default()
-            },
-            Transform::from_translation(world_pos).with_rotation(Quat::from_rotation_z(angle)),
-        ));
+    for (tile_e, gpos, tile) in changed_tiles.iter() {
+        let mag = tile.priority_bias.length();
+        let visible = mag >= BIAS_GLOW_VISIBLE_THRESHOLD;
+        match (existing_by_source.get(&tile_e).copied(), visible) {
+            (Some(glow_e), false) => {
+                commands.entity(glow_e).despawn();
+            }
+            (Some(glow_e), true) => {
+                let alpha = (mag / BIAS_MAGNITUDE_CAP).min(1.0);
+                commands.entity(glow_e).insert(Sprite {
+                    color: Color::srgba(1.0, 0.7, 0.3, alpha),
+                    custom_size: Some(quad_size),
+                    ..default()
+                });
+            }
+            (None, true) => {
+                let alpha = (mag / BIAS_MAGNITUDE_CAP).min(1.0);
+                let world = layout.hex_to_world_pos(gpos.0);
+                commands.spawn((
+                    BiasGlowMarker { source: tile_e },
+                    Sprite {
+                        color: Color::srgba(1.0, 0.7, 0.3, alpha),
+                        custom_size: Some(quad_size),
+                        ..default()
+                    },
+                    Transform::from_xyz(world.x, world.y, 0.7),
+                ));
+            }
+            (None, false) => {}
+        }
     }
 }
 
 #[derive(Component)]
 pub struct RegionHighlightSprite;
 
-/// Build a triangle-list mesh of thin quads for the boundary edges of a hex region.
 fn build_outline_mesh(tiles: &[Hex], layout: &HexLayout, half_width: f32) -> Option<Mesh> {
     let tile_set: HashSet<Hex> = tiles.iter().copied().collect();
     let mut positions: Vec<[f32; 3]> = Vec::new();
@@ -343,5 +316,93 @@ mod tests {
         // inner_radius = 28.0 * sqrt(3)/2 ~= 24.25, * 1.4 ~= 33.9
         assert!(size.x >= 30.0, "sprite too small: {}", size.x);
         assert!(size.x <= 40.0, "sprite too large: {}", size.x);
+    }
+}
+
+#[cfg(test)]
+mod glow_diff_tests {
+    use super::*;
+    use bevy::MinimalPlugins;
+    use kingdom_core::{BIAS_GLOW_VISIBLE_THRESHOLD, GridPos, Tile, create_hex_layout};
+
+    fn test_app() -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.insert_resource(create_hex_layout());
+        app.add_systems(PostUpdate, bias_glow_render_system);
+        app
+    }
+
+    #[test]
+    fn glow_does_not_churn_when_tiles_unchanged() {
+        let mut app = test_app();
+        app.world_mut().spawn((
+            GridPos(Hex::new(0, 0)),
+            Tile {
+                priority_bias: Vec2::new(BIAS_GLOW_VISIBLE_THRESHOLD * 2.0, 0.0),
+                ..Default::default()
+            },
+        ));
+        app.update();
+        let glow_count_1 = app
+            .world_mut()
+            .query::<&BiasGlowMarker>()
+            .iter(app.world())
+            .count();
+        assert_eq!(glow_count_1, 1);
+
+        let glow_entity_1 = app
+            .world_mut()
+            .query_filtered::<Entity, With<BiasGlowMarker>>()
+            .iter(app.world())
+            .next()
+            .unwrap();
+        app.update();
+        let glow_entity_2 = app
+            .world_mut()
+            .query_filtered::<Entity, With<BiasGlowMarker>>()
+            .iter(app.world())
+            .next()
+            .unwrap();
+        assert_eq!(
+            glow_entity_1, glow_entity_2,
+            "glow entity should not be despawned/respawned when tile is unchanged"
+        );
+    }
+
+    #[test]
+    fn glow_disappears_when_bias_drops_below_threshold() {
+        let mut app = test_app();
+        let tile_e = app
+            .world_mut()
+            .spawn((
+                GridPos(Hex::new(1, 1)),
+                Tile {
+                    priority_bias: Vec2::new(BIAS_GLOW_VISIBLE_THRESHOLD * 2.0, 0.0),
+                    ..Default::default()
+                },
+            ))
+            .id();
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query::<&BiasGlowMarker>()
+                .iter(app.world())
+                .count(),
+            1
+        );
+
+        app.world_mut()
+            .get_mut::<Tile>(tile_e)
+            .unwrap()
+            .priority_bias = Vec2::ZERO;
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query::<&BiasGlowMarker>()
+                .iter(app.world())
+                .count(),
+            0
+        );
     }
 }

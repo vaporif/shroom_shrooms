@@ -21,35 +21,7 @@ impl TerrainType {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
-pub struct RivalId(pub u32);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
 pub struct FragmentId(pub u32);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect, Default)]
-pub enum Occupant {
-    #[default]
-    Empty,
-    Player(RegionId),
-    Rival(RivalId),
-}
-
-impl Occupant {
-    pub fn is_player(&self) -> bool {
-        matches!(self, Self::Player(_))
-    }
-
-    pub fn is_rival(&self) -> bool {
-        matches!(self, Self::Rival(_))
-    }
-
-    pub fn region_id(&self) -> Option<RegionId> {
-        match self {
-            Self::Player(id) => Some(*id),
-            _ => None,
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
 pub enum TileContents {
@@ -65,28 +37,37 @@ pub enum TileContents {
 #[derive(Component, Clone, Debug, Reflect)]
 pub struct Tile {
     pub terrain: TerrainType,
-    pub occupant: Occupant,
-    pub nutrient_level: f32,
-    pub moisture: f32,
-    pub discovered: bool,
-    pub contents: Option<TileContents>,
+    pub region_id: Option<RegionId>,
     pub biomass: f32,
+    pub moisture: f32,
+    pub radiation: f32,
+    pub soil_richness: f32,
     pub nutrient_gradient: Vec2,
     pub priority_bias: Vec2,
+    pub discovered: bool,
+    pub contents: Option<TileContents>,
+}
+
+impl Tile {
+    /// True when the tile is claimed by a region with biomass at or above the claim threshold.
+    pub fn is_owned(&self) -> bool {
+        self.region_id.is_some() && self.biomass >= crate::CLAIM_THRESHOLD
+    }
 }
 
 impl Default for Tile {
     fn default() -> Self {
         Self {
             terrain: TerrainType::Soil,
-            occupant: Occupant::Empty,
-            nutrient_level: 0.5,
-            moisture: 0.5,
-            discovered: false,
-            contents: None,
+            region_id: None,
             biomass: 0.0,
+            moisture: 0.5,
+            radiation: 0.0,
+            soil_richness: 0.5,
             nutrient_gradient: Vec2::ZERO,
             priority_bias: Vec2::ZERO,
+            discovered: false,
+            contents: None,
         }
     }
 }

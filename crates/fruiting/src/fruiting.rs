@@ -9,8 +9,7 @@ pub fn fruiting_system(
     fragments: Query<&FragmentAgent>,
 ) {
     let progress_rate = 0.1;
-    let nutrient_cost = 5.0;
-    let energy_cost = 3.0;
+    let sugar_cost = 5.0;
 
     for (entity, mut body) in fruiting_bodies.iter_mut() {
         let fragment_fused = fragments
@@ -22,14 +21,13 @@ pub fn fruiting_system(
 
         let has_resources = region_states
             .get(body.region_id)
-            .is_some_and(|r| r.nutrients >= nutrient_cost && r.energy >= energy_cost);
+            .is_some_and(|r| r.sugars >= sugar_cost);
         if !has_resources {
             continue;
         }
 
         if let Some(state) = region_states.get_mut(body.region_id) {
-            state.nutrients -= nutrient_cost;
-            state.energy -= energy_cost;
+            state.sugars -= sugar_cost;
         }
         body.progress += progress_rate;
 
@@ -69,8 +67,7 @@ mod tests {
         {
             let mut rs = app.world_mut().resource_mut::<RegionStates>();
             let state = rs.get_mut(rid).unwrap();
-            state.nutrients = 50.0;
-            state.energy = 30.0;
+            state.sugars = 50.0;
         }
 
         app.world_mut().spawn(FruitingBody {
@@ -106,8 +103,7 @@ mod tests {
         {
             let mut rs = app.world_mut().resource_mut::<RegionStates>();
             let state = rs.get_mut(rid).unwrap();
-            state.nutrients = 100.0;
-            state.energy = 100.0;
+            state.sugars = 100.0;
         }
 
         app.world_mut().spawn(FruitingBody {
@@ -131,13 +127,13 @@ mod tests {
         app.add_systems(Update, fruiting_system);
         app.update();
 
-        let mukingdom_count = app
+        let mushroom_count = app
             .world_mut()
             .query::<&MushroomEntity>()
             .iter(app.world())
             .count();
         assert_eq!(
-            mukingdom_count, 1,
+            mushroom_count, 1,
             "completed fruiting should spawn mushroom"
         );
     }

@@ -5,12 +5,6 @@ use crate::region::RegionId;
 use crate::tile::FragmentId;
 
 #[derive(Component, Clone, Debug, Reflect)]
-pub struct HyphalTip {
-    pub region_id: RegionId,
-    pub age: u32,
-}
-
-#[derive(Component, Clone, Debug, Reflect)]
 pub struct FaunaAgent {
     pub health: f32,
     pub damage_per_tick: f32,

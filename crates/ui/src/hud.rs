@@ -96,11 +96,9 @@ pub fn spawn_hud(mut commands: Commands) {
             let hints = [
                 "WASD \u{2014} Pan camera",
                 "Scroll \u{2014} Zoom",
-                "Left click \u{2014} Select tile",
-                "P \u{2014} Set growth priority on selected tile",
-                "Shift+P \u{2014} Clear growth priority",
+                "Click \u{2014} Inspect tile",
+                "Click+drag \u{2014} Paint growth direction",
                 "Space \u{2014} Pause  |  +/- Speed",
-                "1-8 \u{2014} Set specialization",
                 "H \u{2014} Hide hints",
             ];
             for hint in hints {
@@ -160,8 +158,9 @@ pub fn update_hud(inputs: HudInputs, mut texts: HudTexts) {
 
     if let Ok(mut text) = texts.turn.single_mut() {
         **text = format!(
-            "Turn: {} | Fragments: {}/{} | Mushrooms: {}/{} | Seed: {}",
+            "Turn: {} | Speed: {} | Fragments: {}/{} | Mushrooms: {}/{} | Seed: {}",
             game_state.turn,
+            speed.label(),
             game_state.fragments_fused,
             game_state.fragments_total,
             game_state.mushrooms_fruited,
@@ -175,23 +174,13 @@ pub fn update_hud(inputs: HudInputs, mut texts: HudTexts) {
 
         match state {
             Some(state) => {
-                let spec_name = state
-                    .specialization
-                    .map(|s| format!("{s:?}"))
-                    .unwrap_or_else(|| {
-                        state
-                            .target_specialization
-                            .map(|t| format!("-> {t:?}"))
-                            .unwrap_or_else(|| "Unspecialized".into())
-                    });
                 **text = format!(
-                    "{} | N:{:.0} E:{:.0} B:{:.0} | Tiles:{} | Inv:{:.0}",
-                    spec_name,
-                    state.nutrients,
-                    state.energy,
-                    state.biomass,
+                    "Region {}\nSugars: {:.0}\nMelanin: {:.0}\nBiomass: {:.0}\nTiles: {}",
+                    state.region_id.0,
+                    state.sugars,
+                    state.melanin,
+                    state.total_biomass,
                     state.tile_count,
-                    state.specialization_investment
                 );
             }
             None => {

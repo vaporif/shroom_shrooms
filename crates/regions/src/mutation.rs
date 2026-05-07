@@ -14,7 +14,6 @@ pub struct AppliedMutations {
     pub mutations: Vec<UnlockOption>,
 }
 
-/// Picks the player-selected option from the slot machine, falling back to the first.
 pub fn mutation_system(
     mut slot_messages: MessageReader<SlotMachineTriggered>,
     mut mutations: ResMut<AppliedMutations>,
@@ -43,7 +42,6 @@ mod tests {
         app.add_systems(Update, mutation_system);
 
         app.world_mut().write_message(SlotMachineTriggered {
-            pool: UnlockPool::Organic,
             options: vec![UnlockOption {
                 name: "Test Mutation".into(),
                 description: "test".into(),
@@ -72,7 +70,6 @@ mod tests {
             .selected_index = Some(1);
 
         app.world_mut().write_message(SlotMachineTriggered {
-            pool: UnlockPool::Organic,
             options: vec![
                 UnlockOption {
                     name: "First".into(),

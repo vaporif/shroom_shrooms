@@ -6,52 +6,27 @@ mod discovery;
 mod fragment;
 mod mutation;
 mod slot_machine;
-mod specialization;
 
-pub use discovery::{
-    DecompProgress, StudyProgress, decomposer_discovery_system, explorer_discovery_system,
-    researcher_study_system,
-};
+pub use discovery::{DecompProgress, decomposition_system};
 pub use fragment::fragment_system;
 pub use mutation::{AppliedMutations, MutationSelection, mutation_system};
 pub use slot_machine::{SlotMachineRng, SlotMachineTriggered, slot_machine_system};
-pub use specialization::specialization_system;
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RegionsSystems {
-    Specialization,
     Discovery,
     Unlock,
     Fragment,
-}
-
-pub struct SpecializationPlugin;
-
-impl Plugin for SpecializationPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            specialization_system.in_set(RegionsSystems::Specialization),
-        );
-    }
 }
 
 pub struct DiscoveryPlugin;
 
 impl Plugin for DiscoveryPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<StudyProgress>()
-            .init_resource::<DecompProgress>()
-            .add_systems(
-                Update,
-                (
-                    explorer_discovery_system,
-                    researcher_study_system,
-                    decomposer_discovery_system,
-                )
-                    .chain()
-                    .in_set(RegionsSystems::Discovery),
-            );
+        app.init_resource::<DecompProgress>().add_systems(
+            Update,
+            decomposition_system.in_set(RegionsSystems::Discovery),
+        );
     }
 }
 
@@ -90,16 +65,7 @@ impl Plugin for RegionsPlugin {
                     .chain()
                     .in_set(SimulationSystems),
             )
-            .configure_sets(
-                Update,
-                (RegionsSystems::Specialization, RegionsSystems::Fragment)
-                    .in_set(SimulationSystems),
-            )
-            .add_plugins((
-                SpecializationPlugin,
-                DiscoveryPlugin,
-                UnlockPlugin,
-                FragmentPlugin,
-            ));
+            .configure_sets(Update, RegionsSystems::Fragment.in_set(SimulationSystems))
+            .add_plugins((DiscoveryPlugin, UnlockPlugin, FragmentPlugin));
     }
 }

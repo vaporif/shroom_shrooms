@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 use kingdom_core::SimulationSystems;
 
-pub use effects::mukingdom_effect_system;
+pub use effects::mushroom_effect_system;
 pub use fruiting::fruiting_system;
 pub use spores::{SporeAction, SporeRng, spore_system};
 
@@ -20,7 +20,7 @@ impl Plugin for FruitingPlugin {
                 Update,
                 (
                     fruiting::fruiting_system,
-                    effects::mukingdom_effect_system,
+                    effects::mushroom_effect_system,
                     spores::spore_system,
                 )
                     .chain()

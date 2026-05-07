@@ -3,133 +3,45 @@ use std::collections::HashMap;
 use bevy::ecs::message::MessageWriter;
 use bevy::prelude::*;
 use kingdom_core::{
-    DecompositionComplete, GridPos, GridWorld, Hex, HyphalTip, Occupant, RegionStates,
-    SpecializationType, StudyComplete, Tile, TileContents, TileDiscovered, UnlockPool,
+    DECOMP_RATE, DecompositionComplete, GridPos, Hex, RegionStates, SUGAR_FROM_DECOMP, Tile,
+    TileContents,
 };
-
-use crate::slot_machine::SlotMachineTriggered;
-
-const STUDY_RATE: f32 = 0.1;
-const DECOMP_RATE: f32 = 0.1;
-
-pub fn explorer_discovery_system(
-    tips: Query<(&GridPos, &HyphalTip)>,
-    mut tiles: Query<&mut Tile>,
-    grid: Res<GridWorld>,
-    region_states: Res<RegionStates>,
-    mut discovered_messages: MessageWriter<TileDiscovered>,
-) {
-    for (gpos, tip) in tips.iter() {
-        let is_explorer = region_states
-            .get(tip.region_id)
-            .is_some_and(|r| r.specialization == Some(SpecializationType::Explorer));
-        if !is_explorer {
-            continue;
-        }
-
-        for pos in std::iter::once(gpos.0).chain(grid.neighbors(gpos.0).map(|(p, _)| p)) {
-            let Some(&entity) = grid.tiles.get(&pos) else {
-                continue;
-            };
-
-            let Ok(mut tile) = tiles.get_mut(entity) else {
-                continue;
-            };
-
-            if !tile.discovered {
-                tile.discovered = true;
-                discovered_messages.write(TileDiscovered {
-                    pos,
-                    contents: tile.contents,
-                });
-            }
-        }
-    }
-}
-
-#[derive(Resource, Default, Debug, Clone, Reflect)]
-pub struct StudyProgress {
-    pub entries: HashMap<Hex, f32>,
-}
-
-pub fn researcher_study_system(
-    tiles: Query<(&GridPos, &Tile)>,
-    grid: Res<GridWorld>,
-    region_states: Res<RegionStates>,
-    mut study: ResMut<StudyProgress>,
-    mut study_messages: MessageWriter<StudyComplete>,
-) {
-    for (gpos, tile) in tiles.iter() {
-        let Occupant::Player(rid) = tile.occupant else {
-            continue;
-        };
-        let is_researcher = region_states
-            .get(rid)
-            .is_some_and(|r| r.specialization == Some(SpecializationType::Researcher));
-        if !is_researcher {
-            continue;
-        }
-
-        for (npos, nentity) in grid.neighbors(gpos.0) {
-            if let Ok((_, ntile)) = tiles.get(nentity) {
-                if !ntile.discovered || ntile.contents.is_none() {
-                    continue;
-                }
-                let progress = study.entries.entry(npos).or_insert(0.0);
-                *progress += STUDY_RATE;
-                if *progress >= 1.0 {
-                    let pool = match ntile.contents {
-                        Some(TileContents::OrganicMatter) => UnlockPool::Organic,
-                        Some(TileContents::Mineral) => UnlockPool::Mineral,
-                        Some(TileContents::Artifact | TileContents::Fragment(_)) => {
-                            UnlockPool::Ruins
-                        }
-                        _ => UnlockPool::Organic,
-                    };
-                    study_messages.write(StudyComplete { pos: npos, pool });
-                    study.entries.remove(&npos);
-                }
-            }
-        }
-    }
-}
 
 #[derive(Resource, Default, Debug, Clone, Reflect)]
 pub struct DecompProgress {
     pub entries: HashMap<Hex, f32>,
 }
 
-pub fn decomposer_discovery_system(
+pub fn decomposition_system(
     mut tiles: Query<(&GridPos, &mut Tile)>,
-    region_states: Res<RegionStates>,
+    mut region_states: ResMut<RegionStates>,
     mut progress: ResMut<DecompProgress>,
     mut decomp_messages: MessageWriter<DecompositionComplete>,
-    mut slot_messages: MessageWriter<SlotMachineTriggered>,
 ) {
     for (gpos, mut tile) in tiles.iter_mut() {
-        let Occupant::Player(rid) = tile.occupant else {
-            continue;
-        };
-        let is_decomposer = region_states
-            .get(rid)
-            .is_some_and(|r| r.specialization == Some(SpecializationType::Decomposer));
-        if !is_decomposer {
+        if !tile.is_owned() {
             continue;
         }
+        let Some(rid) = tile.region_id else { continue };
+        let was_unique = match tile.contents {
+            Some(TileContents::OrganicMatter) => false,
+            Some(TileContents::UniqueDecomposable(_)) => true,
+            _ => continue,
+        };
 
-        if !matches!(tile.contents, Some(TileContents::UniqueDecomposable(_))) {
-            continue;
+        if let Some(state) = region_states.get_mut(rid) {
+            state.sugars += SUGAR_FROM_DECOMP * DECOMP_RATE;
         }
 
         let prog = progress.entries.entry(gpos.0).or_insert(0.0);
         *prog += DECOMP_RATE;
         if *prog >= 1.0 {
             tile.contents = None;
+            tile.soil_richness = (tile.soil_richness + 0.2).min(1.0);
             progress.entries.remove(&gpos.0);
-            decomp_messages.write(DecompositionComplete { pos: gpos.0 });
-            slot_messages.write(SlotMachineTriggered {
-                pool: UnlockPool::Decomposition,
-                options: Vec::new(),
+            decomp_messages.write(DecompositionComplete {
+                pos: gpos.0,
+                was_unique,
             });
         }
     }
@@ -138,153 +50,149 @@ pub fn decomposer_discovery_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kingdom_core::GridWorld;
 
     fn test_app() -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
         app.init_resource::<GridWorld>();
         app.init_resource::<RegionStates>();
-        app.init_resource::<StudyProgress>();
         app.init_resource::<DecompProgress>();
-        app.add_message::<TileDiscovered>();
-        app.add_message::<StudyComplete>();
         app.add_message::<DecompositionComplete>();
-        app.add_message::<SlotMachineTriggered>();
+        app.add_systems(Update, decomposition_system);
         app
     }
 
-    #[test]
-    fn explorer_tip_discovers_tile() {
-        let mut app = test_app();
-        let mut rs = app.world_mut().resource_mut::<RegionStates>();
-        let rid = rs.create_region();
-        rs.get_mut(rid).unwrap().specialization = Some(SpecializationType::Explorer);
-
-        let pos = Hex::new(3, 3);
-        let entity = app
-            .world_mut()
-            .spawn((
-                GridPos(pos),
-                Tile {
-                    discovered: false,
-                    contents: Some(TileContents::Mineral),
-                    occupant: Occupant::Player(rid),
-                    ..default()
-                },
-            ))
-            .id();
+    fn spawn(app: &mut App, pos: Hex, tile: Tile) -> Entity {
+        let e = app.world_mut().spawn((GridPos(pos), tile)).id();
         app.world_mut()
             .resource_mut::<GridWorld>()
             .tiles
-            .insert(pos, entity);
+            .insert(pos, e);
+        e
+    }
 
-        app.world_mut().spawn((
-            GridPos(pos),
-            HyphalTip {
-                region_id: rid,
-                age: 0,
+    #[test]
+    fn owned_organic_tile_adds_sugars() {
+        let mut app = test_app();
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+        spawn(
+            &mut app,
+            Hex::ZERO,
+            Tile {
+                region_id: Some(rid),
+                biomass: 0.5,
+                contents: Some(TileContents::OrganicMatter),
+                ..default()
             },
-        ));
-
-        app.add_systems(Update, explorer_discovery_system);
+        );
+        let before = app
+            .world()
+            .resource::<RegionStates>()
+            .get(rid)
+            .unwrap()
+            .sugars;
         app.update();
-
-        let tile = app.world().get::<Tile>(entity).unwrap();
-        assert!(tile.discovered, "tile should be marked discovered");
+        let after = app
+            .world()
+            .resource::<RegionStates>()
+            .get(rid)
+            .unwrap()
+            .sugars;
+        assert!(
+            after > before,
+            "decomposition should yield sugars: {before} -> {after}"
+        );
     }
 
     #[test]
-    fn researcher_completes_study() {
+    fn unique_decomposable_completion_fires_was_unique_event() {
+        use bevy::ecs::message::MessageReader;
         let mut app = test_app();
-        let mut rs = app.world_mut().resource_mut::<RegionStates>();
-        let rid = rs.create_region();
-        rs.get_mut(rid).unwrap().specialization = Some(SpecializationType::Researcher);
-
-        let pos = Hex::new(5, 5);
-        let neighbor_pos = pos.all_neighbors()[0];
-
-        let player_entity = app
+        let rid = app
             .world_mut()
-            .spawn((
-                GridPos(pos),
-                Tile {
-                    occupant: Occupant::Player(rid),
-                    ..default()
-                },
-            ))
-            .id();
-        app.world_mut()
-            .resource_mut::<GridWorld>()
-            .tiles
-            .insert(pos, player_entity);
-
-        let neighbor_entity = app
-            .world_mut()
-            .spawn((
-                GridPos(neighbor_pos),
-                Tile {
-                    discovered: true,
-                    contents: Some(TileContents::Mineral),
-                    occupant: Occupant::Player(rid),
-                    ..default()
-                },
-            ))
-            .id();
-        app.world_mut()
-            .resource_mut::<GridWorld>()
-            .tiles
-            .insert(neighbor_pos, neighbor_entity);
-
-        app.world_mut()
-            .resource_mut::<StudyProgress>()
-            .entries
-            .insert(neighbor_pos, 0.95);
-
-        app.add_systems(Update, researcher_study_system);
-        app.update();
-
-        let study = app.world().resource::<StudyProgress>();
-        let done = study.entries.get(&neighbor_pos).is_none_or(|&v| v >= 1.0);
-        assert!(done, "study should complete when progress reaches 1.0");
-    }
-
-    #[test]
-    fn decomposer_breaks_down_unique_decomposable() {
-        let mut app = test_app();
-        let mut rs = app.world_mut().resource_mut::<RegionStates>();
-        let rid = rs.create_region();
-        rs.get_mut(rid).unwrap().specialization = Some(SpecializationType::Decomposer);
-
+            .resource_mut::<RegionStates>()
+            .create_region();
         let pos = Hex::new(2, 2);
-        let entity = app
-            .world_mut()
-            .spawn((
-                GridPos(pos),
-                Tile {
-                    occupant: Occupant::Player(rid),
-                    contents: Some(TileContents::UniqueDecomposable(0)),
-                    ..default()
-                },
-            ))
-            .id();
-        app.world_mut()
-            .resource_mut::<GridWorld>()
-            .tiles
-            .insert(pos, entity);
-
+        spawn(
+            &mut app,
+            pos,
+            Tile {
+                region_id: Some(rid),
+                biomass: 0.5,
+                contents: Some(TileContents::UniqueDecomposable(0)),
+                ..default()
+            },
+        );
         app.world_mut()
             .resource_mut::<DecompProgress>()
             .entries
-            .insert(pos, 0.95);
-
-        app.add_systems(Update, decomposer_discovery_system);
+            .insert(pos, 0.99);
+        let captured = std::sync::Arc::new(std::sync::Mutex::new(false));
+        let captured_c = captured.clone();
+        app.add_systems(
+            Update,
+            (move |mut r: MessageReader<DecompositionComplete>| {
+                for ev in r.read() {
+                    if ev.was_unique {
+                        *captured_c.lock().unwrap() = true;
+                    }
+                }
+            })
+            .after(decomposition_system),
+        );
         app.update();
+        assert!(*captured.lock().unwrap());
+    }
 
+    #[test]
+    fn non_owned_tile_no_progress() {
+        let mut app = test_app();
+        spawn(
+            &mut app,
+            Hex::ZERO,
+            Tile {
+                region_id: None,
+                biomass: 0.0,
+                contents: Some(TileContents::OrganicMatter),
+                ..default()
+            },
+        );
+        app.update();
+        assert!(app.world().resource::<DecompProgress>().entries.is_empty());
+    }
+
+    #[test]
+    fn decomposition_progresses_across_ticks() {
+        let mut app = test_app();
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+        let pos = Hex::new(3, 3);
+        let entity = spawn(
+            &mut app,
+            pos,
+            Tile {
+                region_id: Some(rid),
+                biomass: 0.5,
+                contents: Some(TileContents::OrganicMatter),
+                ..default()
+            },
+        );
+        // 1/DECOMP_RATE = 50 ticks in real arithmetic; +1 absorbs f32 drift on
+        // the running progress sum.
+        for _ in 0..51 {
+            app.update();
+        }
         let tile = app.world().get::<Tile>(entity).unwrap();
         assert!(
-            tile.contents.is_none()
-                || !matches!(tile.contents, Some(TileContents::UniqueDecomposable(_))),
-            "decomposable should be consumed on completion"
+            tile.contents.is_none(),
+            "expected contents cleared after ~50 ticks, was {:?}",
+            tile.contents
         );
     }
 }

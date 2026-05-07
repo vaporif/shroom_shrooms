@@ -1,8 +1,5 @@
 use bevy::prelude::*;
-use kingdom_core::{GamePhase, GameState, Tile};
-
-const RIVAL_CONTROL_THRESHOLD: f32 = 0.6;
-const LOSS_TURN_THRESHOLD: u32 = 20;
+use kingdom_core::{GamePhase, GameState};
 
 #[derive(Component)]
 pub struct TitleCard;
@@ -13,38 +10,13 @@ pub struct EndGamePanel;
 #[derive(Component)]
 pub struct RestartButton;
 
-pub fn game_outcome_system(
-    mut phase: ResMut<GamePhase>,
-    game_state: Res<GameState>,
-    tiles: Query<&Tile>,
-) {
+pub fn game_outcome_system(mut phase: ResMut<GamePhase>, game_state: Res<GameState>) {
     if *phase != GamePhase::Playing {
         return;
     }
 
     if game_state.victory() {
         *phase = GamePhase::Victory;
-        return;
-    }
-
-    if game_state.turn >= LOSS_TURN_THRESHOLD {
-        let mut passable = 0u32;
-        let mut rival = 0u32;
-        for tile in &tiles {
-            if tile.terrain.is_passable() {
-                passable += 1;
-                if tile.occupant.is_rival() {
-                    rival += 1;
-                }
-            }
-        }
-        if passable > 0 {
-            #[allow(clippy::cast_precision_loss)]
-            let ratio = rival as f32 / passable as f32;
-            if ratio > RIVAL_CONTROL_THRESHOLD {
-                *phase = GamePhase::Defeat;
-            }
-        }
     }
 }
 
@@ -209,73 +181,13 @@ pub fn restart_button_system(
 mod tests {
     use bevy::ecs::system::RunSystemOnce;
 
-    use kingdom_core::{GridPos, GridWorld, Hex, Occupant, RivalId, TerrainType};
-
     use super::*;
 
     fn setup_world() -> World {
         let mut world = World::new();
         world.init_resource::<GamePhase>();
         world.init_resource::<GameState>();
-        world.init_resource::<GridWorld>();
         world
-    }
-
-    fn spawn_tile(world: &mut World, pos: Hex, terrain: TerrainType, occupant: Occupant) {
-        let entity = world
-            .spawn((
-                GridPos(pos),
-                Tile {
-                    terrain,
-                    occupant,
-                    ..default()
-                },
-            ))
-            .id();
-        world.resource_mut::<GridWorld>().tiles.insert(pos, entity);
-    }
-
-    #[test]
-    fn loss_triggers_when_rival_controls_majority() {
-        let mut world = setup_world();
-
-        world.resource_mut::<GameState>().turn = 25;
-        *world.resource_mut::<GamePhase>() = GamePhase::Playing;
-
-        // 10 passable tiles, 7 rival-occupied
-        for i in 0..10 {
-            let occupant = if i < 7 {
-                Occupant::Rival(RivalId(0))
-            } else {
-                Occupant::Empty
-            };
-            spawn_tile(&mut world, Hex::new(i, 0), TerrainType::Soil, occupant);
-        }
-
-        let _ = world.run_system_once(game_outcome_system);
-
-        assert_eq!(*world.resource::<GamePhase>(), GamePhase::Defeat);
-    }
-
-    #[test]
-    fn loss_does_not_trigger_before_turn_20() {
-        let mut world = setup_world();
-
-        world.resource_mut::<GameState>().turn = 10;
-        *world.resource_mut::<GamePhase>() = GamePhase::Playing;
-
-        for i in 0..10 {
-            let occupant = if i < 7 {
-                Occupant::Rival(RivalId(0))
-            } else {
-                Occupant::Empty
-            };
-            spawn_tile(&mut world, Hex::new(i, 0), TerrainType::Soil, occupant);
-        }
-
-        let _ = world.run_system_once(game_outcome_system);
-
-        assert_eq!(*world.resource::<GamePhase>(), GamePhase::Playing);
     }
 
     #[test]
@@ -305,20 +217,6 @@ mod tests {
         gs.mushrooms_required = 2;
         gs.mushrooms_fruited = 0;
         gs.turn = 5;
-
-        // A few tiles, no rival majority
-        spawn_tile(
-            &mut world,
-            Hex::new(0, 0),
-            TerrainType::Soil,
-            Occupant::Empty,
-        );
-        spawn_tile(
-            &mut world,
-            Hex::new(1, 0),
-            TerrainType::Soil,
-            Occupant::Rival(RivalId(0)),
-        );
 
         let _ = world.run_system_once(game_outcome_system);
 

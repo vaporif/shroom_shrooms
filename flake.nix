@@ -155,6 +155,7 @@
         cargo-watch
         lld
         bevy_lint
+        tracy_0_13
       ];
 
       mkDevShell = toolchain:

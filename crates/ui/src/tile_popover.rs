@@ -2,8 +2,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use kingdom_core::{
-    GridWorld, Hex, HexLayout, Occupant, RegionStates, SelectedRegion, TerrainType, Tile,
-    TileContents,
+    GridWorld, Hex, HexLayout, RegionStates, SelectedRegion, TerrainType, Tile, TileContents,
 };
 use kingdom_input::GameCamera;
 
@@ -49,9 +48,17 @@ pub fn update_tile_popover(
     };
 
     if let Ok((_, mut node, _)) = existing.single_mut() {
-        node.left = Val::Px(payload.pos.x);
-        node.top = Val::Px(payload.pos.y);
-        if let Ok(mut t) = text.single_mut() {
+        let new_left = Val::Px(payload.pos.x);
+        let new_top = Val::Px(payload.pos.y);
+        if node.left != new_left {
+            node.left = new_left;
+        }
+        if node.top != new_top {
+            node.top = new_top;
+        }
+        if let Ok(mut t) = text.single_mut()
+            && **t != payload.text
+        {
             **t = payload.text;
         }
     } else {
@@ -130,10 +137,9 @@ fn format_tile(hex: Hex, tile: &Tile, region_states: &RegionStates) -> String {
         TerrainType::Toxic => "Toxic",
         TerrainType::Surface => "Surface",
     };
-    let occupant = match tile.occupant {
-        Occupant::Empty => "Empty".into(),
-        Occupant::Player(rid) => format!("Player (region {})", rid.0),
-        Occupant::Rival(rid) => format!("Rival {}", rid.0),
+    let region_label = match tile.region_id {
+        Some(rid) => format!("Region {}", rid.0),
+        None => "unowned".into(),
     };
     let contents = tile.contents.map(|c| match c {
         TileContents::OrganicMatter => "Organic matter".into(),
@@ -145,38 +151,35 @@ fn format_tile(hex: Hex, tile: &Tile, region_states: &RegionStates) -> String {
         TileContents::PlantRoot(id) => format!("Plant root #{id}"),
     });
 
-    let mut out = format!(
-        "({}, {})\nTerrain: {terrain}\nOccupant: {occupant}",
-        hex.x, hex.y,
-    );
-    if let Some(c) = contents {
-        out.push_str(&format!("\nContents: {c}"));
-    }
+    let mut out = format!("({}, {})\nTerrain: {terrain}\n{region_label}", hex.x, hex.y,);
     if !tile.discovered {
         out.push_str("\n(undiscovered)");
     }
     out.push_str(&format!(
-        "\nN:{:.0} M:{:.0} B:{:.0}",
-        tile.nutrient_level * 100.0,
-        tile.moisture * 100.0,
+        "\nBiomass: {:.2}\nMoisture: {:.0}\nRadiation: {:.0}\nSoil richness: {:.0}",
         tile.biomass,
+        tile.moisture * 100.0,
+        tile.radiation * 100.0,
+        tile.soil_richness * 100.0,
     ));
+    if let Some(c) = contents {
+        out.push_str(&format!("\nContents: {c}"));
+    }
 
-    if let Some(state) = tile
-        .occupant
-        .region_id()
-        .and_then(|rid| region_states.get(rid))
-    {
-        let spec = state
-            .specialization
-            .map(|s| format!("{s:?}"))
-            .or_else(|| state.target_specialization.map(|t| format!("-> {t:?}")))
-            .unwrap_or_else(|| "Unspecialized".into());
-        out.push_str(&format!(
-            "\nRegion {}: {spec} | tiles {} | inv {:.0}",
-            state.region_id.0, state.tile_count, state.specialization_investment,
-        ));
+    if let Some(state) = tile.region_id.and_then(|rid| region_states.get(rid)) {
+        out.push_str(&format!("\nRegion tiles: {}", state.tile_count));
     }
 
     out
+}
+
+#[cfg(test)]
+mod popover_tests {
+    use bevy::prelude::*;
+
+    #[test]
+    fn val_px_equality_holds_for_same_value() {
+        assert_eq!(Val::Px(1.0), Val::Px(1.0));
+        assert_ne!(Val::Px(1.0), Val::Px(2.0));
+    }
 }

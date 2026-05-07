@@ -5,59 +5,23 @@ use bevy::prelude::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
 pub struct RegionId(pub u32);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
-pub enum SpecializationType {
-    Decomposer,
-    Parasite,
-    Symbiont,
-    Infiltrator,
-    Hunter,
-    Transporter,
-    Explorer,
-    Researcher,
-}
-
-pub const SPEC_TIER_1: f32 = 100.0;
-pub const SPEC_TIER_2: f32 = 300.0;
-pub const SPEC_TIER_3: f32 = 600.0;
-
 #[derive(Clone, Debug, Reflect)]
 pub struct RegionState {
     pub region_id: RegionId,
-    pub specialization: Option<SpecializationType>,
-    pub target_specialization: Option<SpecializationType>,
-    pub nutrients: f32,
-    pub energy: f32,
-    pub biomass: f32,
-    pub specialization_investment: f32,
+    pub sugars: f32,
+    pub melanin: f32,
+    pub total_biomass: f32,
     pub tile_count: u32,
-    pub nutrient_bonus: f32,
 }
 
 impl RegionState {
     pub fn new(id: RegionId) -> Self {
         Self {
             region_id: id,
-            specialization: None,
-            target_specialization: None,
-            nutrients: 10.0,
-            energy: 0.0,
-            biomass: 0.0,
-            specialization_investment: 0.0,
+            sugars: 10.0,
+            melanin: 0.0,
+            total_biomass: 0.0,
             tile_count: 0,
-            nutrient_bonus: 0.0,
-        }
-    }
-
-    pub fn tier(&self) -> u8 {
-        if self.specialization_investment >= SPEC_TIER_3 {
-            3
-        } else if self.specialization_investment >= SPEC_TIER_2 {
-            2
-        } else if self.specialization_investment >= SPEC_TIER_1 {
-            1
-        } else {
-            0
         }
     }
 }
