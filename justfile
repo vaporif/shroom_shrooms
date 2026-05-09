@@ -51,6 +51,11 @@ run *args:
 dev *args:
     cargo run --features dev {{args}}
 
+# Run with dev + bevy dev tools (inspector, picking debug, etc.)
+[group('run')]
+dev-tools *args:
+    cargo run --features dev-tools {{args}}
+
 # Watch for changes
 [group('run')]
 watch:

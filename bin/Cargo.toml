@@ -6,7 +6,8 @@ license-file.workspace = true
 default-run = "TheFifthKingdom"
 
 [features]
-dev = ["bevy/dynamic_linking", "bevy/hotpatching", "bevy/dev"]
+dev = ["bevy/dynamic_linking", "bevy/hotpatching"]
+dev-tools = ["dev", "bevy/dev"]
 gen-atlas = ["dep:image"]
 trace = ["bevy/trace_tracy"]
 

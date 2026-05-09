@@ -9,6 +9,7 @@ use kingdom_core::{
 
 use crate::data_layer::DiscoveryMap;
 
+// TODO: to change
 const MAP_WIDTH: u32 = 80;
 const MAP_HEIGHT: u32 = 60;
 
@@ -38,7 +39,7 @@ const TERRAIN_Z: f32 = -10.0;
 
 const LIT_TOP: LinearRgba = LinearRgba::new(1.05, 0.95, 0.78, 1.0);
 const LIT_BOTTOM: LinearRgba = LinearRgba::new(0.55, 0.62, 0.85, 1.0);
-const HIDDEN: LinearRgba = LinearRgba::new(0.04, 0.04, 0.06, 1.0);
+const HIDDEN: LinearRgba = LinearRgba::new(0.0, 0.0, 0.0, 1.0);
 
 pub fn terrain_base_color(terrain: TerrainType) -> LinearRgba {
     match terrain {
@@ -273,7 +274,6 @@ pub fn terrain_tile_update_system(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -314,9 +314,11 @@ mod tests {
 
     #[test]
     fn depth_gradient_top_is_warm_bottom_is_cool() {
-        let top = depth_lit_color(
-            Hex::from_offset_coordinates([0, 0], OffsetHexMode::Odd, HexOrientation::Pointy),
-        );
+        let top = depth_lit_color(Hex::from_offset_coordinates(
+            [0, 0],
+            OffsetHexMode::Odd,
+            HexOrientation::Pointy,
+        ));
         let bottom = depth_lit_color(Hex::from_offset_coordinates(
             [0, (MAP_HEIGHT - 1) as i32],
             OffsetHexMode::Odd,
