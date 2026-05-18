@@ -1112,7 +1112,7 @@ Expected: PASS — all three production/cap/upkeep tests green.
 
 Run: `git add -A && git commit -m "units: founder production, unit cap, upkeep"`
 
-- [ ] **Step 10: Write the failing test for unit re-parenting on merge**
+- [x] **Step 10: Write the failing test for unit re-parenting on merge**
 
 `Unit` now exists, so `region_tracking_system` can re-parent the units of an absorbed region onto the merge survivor. Without this a founder produced by an absorbed network keeps a dangling `owner`: it pays no upkeep yet still counts against the unit cap. Add to the `tests` module in `crates/world/src/region_tracking.rs`:
 
@@ -1145,7 +1145,7 @@ fn merge_reparents_absorbed_units_to_the_survivor() {
 Run: `cargo nextest run -p kingdom_world merge_reparents`
 Expected: FAIL — `region_tracking_system` does not re-parent units yet.
 
-- [ ] **Step 11: Fold unit re-parenting into `region_tracking_system`**
+- [x] **Step 11: Fold unit re-parenting into `region_tracking_system`**
 
 In `crates/world/src/region_tracking.rs`, add `Unit` to the `kingdom_core` import and add a `&mut Unit` query param. Pass 3 of `region_tracking_system` (built in Task 1) already produces the `reparent` map — every absorbed region id mapped to its survivor — so this step only adds the consumer, no change to Passes 1–4.
 
@@ -1176,12 +1176,12 @@ After Pass 3 has built `reparent` and before `region_states.regions.retain(...)`
 
 `kingdom_world` already depends on `kingdom_core`, so `Unit` is in scope with no new manifest change.
 
-- [ ] **Step 12: Run the re-parenting test to verify it passes**
+- [x] **Step 12: Run the re-parenting test to verify it passes**
 
 Run: `cargo nextest run -p kingdom_world region`
 Expected: PASS — the merge/split tests and the new re-parenting test are all green.
 
-- [ ] **Step 13: Render founder sprites (static position)**
+- [x] **Step 13: Render founder sprites (static position)**
 
 Append to `crates/render/src/units_render.rs`:
 
@@ -1240,7 +1240,7 @@ pub fn despawn_unit_sprites(
 
 Move the `use kingdom_core::Unit;` to the existing `use kingdom_core::{...}` line at the top of the file rather than a second `use` statement.
 
-- [ ] **Step 14: Register the unit render systems**
+- [x] **Step 14: Register the unit render systems**
 
 In `crates/render/src/lib.rs`, add to the `PostUpdate` tuple:
 
@@ -1249,7 +1249,7 @@ In `crates/render/src/lib.rs`, add to the `PostUpdate` tuple:
                     units_render::despawn_unit_sprites,
 ```
 
-- [ ] **Step 15: HUD — unit count and aggregate resources**
+- [x] **Step 15: HUD — unit count and aggregate resources**
 
 In `crates/ui/src/hud.rs`, add a `Unit` query to `HudInputs`. Since `HudInputs` is a `SystemParam` with a `'w` lifetime only, add a second lifetime for the query — change `pub struct HudInputs<'w>` to `pub struct HudInputs<'w, 's>` and add:
 
@@ -1297,12 +1297,12 @@ and compute:
 
 then use `"Units: {}/{}"` with `unit_count, cap`. Remove the placeholder `captured_hives = 0` line.
 
-- [ ] **Step 16: Verify build, lint, tests**
+- [x] **Step 16: Verify build, lint, tests**
 
 Run: `just lint && cargo nextest run -p kingdom_units -p kingdom_world -p kingdom_render -p kingdom_ui`
 Expected: PASS.
 
-- [ ] **Step 17: Commit**
+- [x] **Step 17: Commit**
 
 Run: `git add -A && git commit -m "render+ui+world: founder sprites, unit re-parenting, HUD unit count"`
 

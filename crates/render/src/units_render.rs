@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use kingdom_core::{GridPos, HexLayout, Hive};
+use kingdom_core::{GridPos, HexLayout, Hive, Unit};
 
 use crate::assets::EntitySprites;
 use crate::entity_render::organism_sprite_size;
@@ -64,4 +64,53 @@ pub fn hive_tint_system(
 fn region_tint(id: u32) -> Color {
     let hue = (id as f32 * 67.0) % 360.0;
     Color::hsl(hue, 0.6, 0.55)
+}
+
+const UNIT_Z: f32 = 2.5;
+
+/// Units render much smaller than a hex — a small body that visibly walks
+/// across the hex it is crossing, rather than a sprite that fills the tile.
+/// Fraction of the organism (hex-scale) sprite size; tuning value.
+const UNIT_SPRITE_FRACTION: f32 = 0.2;
+
+#[derive(Component)]
+pub struct UnitSprite(pub Entity);
+
+pub fn spawn_unit_sprites(
+    mut commands: Commands,
+    sprites: Res<EntitySprites>,
+    layout: Res<HexLayout>,
+    new_units: Query<(Entity, &GridPos), Added<Unit>>,
+) {
+    let size = organism_sprite_size(&layout) * UNIT_SPRITE_FRACTION;
+    for (source, gpos) in new_units.iter() {
+        let world = layout.hex_to_world_pos(gpos.0);
+        commands.spawn((
+            UnitSprite(source),
+            Sprite {
+                image: sprites.fauna.clone(),
+                // Sickly fungal green — a parasited insect.
+                color: Color::srgb(0.45, 0.75, 0.35),
+                custom_size: Some(size),
+                ..default()
+            },
+            Transform::from_translation(world.extend(UNIT_Z)),
+        ));
+    }
+}
+
+pub fn despawn_unit_sprites(
+    mut commands: Commands,
+    mut removed: RemovedComponents<Unit>,
+    sprites: Query<(Entity, &UnitSprite)>,
+) {
+    let gone: std::collections::HashSet<Entity> = removed.read().collect();
+    if gone.is_empty() {
+        return;
+    }
+    for (sprite_e, link) in &sprites {
+        if gone.contains(&link.0) {
+            commands.entity(sprite_e).despawn();
+        }
+    }
 }

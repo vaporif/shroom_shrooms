@@ -2,10 +2,11 @@ use std::collections::{HashMap, HashSet};
 
 use bevy::prelude::*;
 use hexx::Hex;
-use kingdom_core::{GridPos, GridWorld, RegionId, RegionStates, Tile};
+use kingdom_core::{GridPos, GridWorld, RegionId, RegionStates, Tile, Unit};
 
 pub fn region_tracking_system(
     mut tiles: Query<(&GridPos, &mut Tile)>,
+    mut units: Query<&mut Unit>,
     grid: Res<GridWorld>,
     mut region_states: ResMut<RegionStates>,
 ) {
@@ -108,6 +109,16 @@ pub fn region_tracking_system(
                 survivor_state.melanin += state.melanin;
             }
             reparent.insert(rid, survivor);
+        }
+    }
+
+    // Re-parent the units of every absorbed region onto its survivor, so a
+    // founder produced by an absorbed network keeps paying upkeep.
+    if !reparent.is_empty() {
+        for mut unit in &mut units {
+            if let Some(&survivor) = reparent.get(&unit.owner) {
+                unit.owner = survivor;
+            }
         }
     }
 
@@ -329,5 +340,41 @@ mod tests {
         spawn_tile(&mut app, Hex::new(0, 0), Some(rid), 0.05);
         app.update();
         assert!(app.world().resource::<RegionStates>().get(rid).is_none());
+    }
+
+    #[test]
+    fn merge_reparents_absorbed_units_to_the_survivor() {
+        use kingdom_core::{Unit, UnitKind};
+
+        let mut app = test_app();
+        let old = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+        let young = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+        let unit = app
+            .world_mut()
+            .spawn((
+                GridPos(Hex::new(9, 9)),
+                Unit {
+                    kind: UnitKind::Founder,
+                    owner: young,
+                },
+            ))
+            .id();
+
+        spawn_tile(&mut app, Hex::new(0, 0), Some(old), 1.0);
+        spawn_tile(&mut app, Hex::new(1, 0), Some(young), 1.0);
+        app.update();
+
+        assert!(app.world().resource::<RegionStates>().get(young).is_none());
+        assert_eq!(
+            app.world().get::<Unit>(unit).unwrap().owner,
+            old,
+            "the absorbed region's unit follows the merge survivor",
+        );
     }
 }

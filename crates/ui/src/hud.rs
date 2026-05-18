@@ -135,7 +135,7 @@ pub struct HudTexts<'w, 's> {
 }
 
 #[derive(SystemParam)]
-pub struct HudInputs<'w> {
+pub struct HudInputs<'w, 's> {
     game_state: Res<'w, GameState>,
     region_states: Res<'w, RegionStates>,
     selected: Res<'w, SelectedRegion>,
@@ -143,6 +143,8 @@ pub struct HudInputs<'w> {
     keyboard: Res<'w, ButtonInput<KeyCode>>,
     config: Res<'w, LaunchConfig>,
     hints_visible: ResMut<'w, HintsVisible>,
+    units: Query<'w, 's, &'static kingdom_core::Unit>,
+    hives: Query<'w, 's, &'static kingdom_core::Hive>,
 }
 
 pub fn update_hud(inputs: HudInputs, mut texts: HudTexts) {
@@ -154,14 +156,26 @@ pub fn update_hud(inputs: HudInputs, mut texts: HudTexts) {
         keyboard,
         config,
         mut hints_visible,
+        units,
+        hives,
     } = inputs;
+
+    let total_sugars: f32 = region_states.regions.values().map(|r| r.sugars).sum();
+    let total_melanin: f32 = region_states.regions.values().map(|r| r.melanin).sum();
+    let unit_count = units.iter().count();
+    let captured_hives = hives.iter().filter(|h| h.captured_by.is_some()).count() as u32;
+    let cap = kingdom_core::UNIT_CAP_BASE + captured_hives * kingdom_core::UNIT_CAP_PER_HIVE;
 
     if let Ok(mut text) = texts.turn.single_mut() {
         **text = format!(
-            "Turn: {} | Speed: {} | Networks: {} | Fragments: {}/{} | Mushrooms: {}/{} | Seed: {}",
+            "Turn: {} | Speed: {} | Networks: {} | Sugars: {:.0} | Melanin: {:.0} | Units: {}/{} | Fragments: {}/{} | Mushrooms: {}/{} | Seed: {}",
             game_state.turn,
             speed.label(),
             region_states.regions.len(),
+            total_sugars,
+            total_melanin,
+            unit_count,
+            cap,
             game_state.fragments_fused,
             game_state.fragments_total,
             game_state.mushrooms_fruited,
