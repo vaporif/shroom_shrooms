@@ -8,6 +8,7 @@ use kingdom_input::InputPlugin;
 use kingdom_regions::RegionsPlugin;
 use kingdom_render::RenderPlugin;
 use kingdom_ui::UiPlugin;
+use kingdom_units::UnitsPlugin;
 use kingdom_world::WorldPlugin;
 
 pub struct KingdomPlugins;
@@ -18,6 +19,7 @@ impl PluginGroup for KingdomPlugins {
             .add(CorePlugin)
             .add(SimulationPlugin)
             .add(WorldPlugin)
+            .add(UnitsPlugin)
             .add(GrowthPlugin)
             .add(RegionsPlugin)
             .add(RenderPlugin)

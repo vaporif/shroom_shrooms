@@ -17,6 +17,7 @@ hexx = { version = "0.24", features = ["bevy"] }
 leafwing-input-manager = "0.20"
 image = "0.25"
 bevy_ecs_tilemap = "0.18.1"
+pathfinding = "4"
 
 kingdom_core = { path = "crates/core" }
 kingdom_world = { path = "crates/world" }
@@ -27,6 +28,7 @@ kingdom_input = { path = "crates/input" }
 kingdom_ai = { path = "crates/ai" }
 kingdom_fruiting = { path = "crates/fruiting" }
 kingdom_ui = { path = "crates/ui" }
+kingdom_units = { path = "crates/units" }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }

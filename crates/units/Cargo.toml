@@ -1,0 +1,12 @@
+[package]
+name = "kingdom_units"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+
+[dependencies]
+bevy = { workspace = true }
+hexx = { workspace = true }
+pathfinding = { workspace = true }
+kingdom_core = { workspace = true }
+kingdom_world = { workspace = true }

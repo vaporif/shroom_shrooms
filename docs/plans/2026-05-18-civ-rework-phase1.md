@@ -570,7 +570,7 @@ Expected: PASS — hives spawn and none sit within 6 hexes of the start.
 
 Run: `git add -A && git commit -m "core+world: Hive component and world-gen placement"`
 
-- [ ] **Step 9: Create the `kingdom_units` crate manifest**
+- [x] **Step 9: Create the `kingdom_units` crate manifest**
 
 Create `crates/units/Cargo.toml`:
 
@@ -604,7 +604,7 @@ kingdom_units = { path = "crates/units" }
 
 `members = ["crates/*", "bin"]` already globs the new crate in.
 
-- [ ] **Step 10: Write the failing test for `hive_capture_system`**
+- [x] **Step 10: Write the failing test for `hive_capture_system`**
 
 Create `crates/units/src/hive.rs` with the test module first:
 
@@ -663,12 +663,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 11: Run the test to verify it fails**
+- [x] **Step 11: Run the test to verify it fails**
 
 Run: `cargo nextest run -p kingdom_units hive`
 Expected: FAIL — `hive_capture_system` is undefined; crate may not compile yet.
 
-- [ ] **Step 12: Implement `hive_capture_system`**
+- [x] **Step 12: Implement `hive_capture_system`**
 
 Prepend to `crates/units/src/hive.rs` (above the test module):
 
@@ -700,7 +700,7 @@ pub fn hive_capture_system(
 }
 ```
 
-- [ ] **Step 13: Create the crate library and plugin**
+- [x] **Step 13: Create the crate library and plugin**
 
 Create `crates/units/src/lib.rs`:
 
@@ -727,12 +727,12 @@ impl Plugin for UnitsPlugin {
 }
 ```
 
-- [ ] **Step 14: Run the test to verify it passes**
+- [x] **Step 14: Run the test to verify it passes**
 
 Run: `cargo nextest run -p kingdom_units hive`
 Expected: PASS — capture follows tile ownership.
 
-- [ ] **Step 15: Register `UnitsPlugin` in the binary**
+- [x] **Step 15: Register `UnitsPlugin` in the binary**
 
 Add to `bin/Cargo.toml` `[dependencies]`:
 
@@ -742,12 +742,12 @@ kingdom_units = { workspace = true }
 
 In `bin/src/plugins.rs`, add `use kingdom_units::UnitsPlugin;` and add `.add(UnitsPlugin)` to the `KingdomPlugins` builder chain, after `.add(WorldPlugin)`.
 
-- [ ] **Step 16: Verify the binary builds**
+- [x] **Step 16: Verify the binary builds**
 
 Run: `cargo build -p kingdom`
 Expected: PASS — `UnitsPlugin` registers cleanly.
 
-- [ ] **Step 17: Commit**
+- [x] **Step 17: Commit**
 
 Run: `git add -A && git commit -m "units: kingdom_units crate with hive capture"`
 

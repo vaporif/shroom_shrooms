@@ -27,6 +27,7 @@ kingdom_input = { workspace = true }
 kingdom_ai = { workspace = true }
 kingdom_fruiting = { workspace = true }
 kingdom_ui = { workspace = true }
+kingdom_units = { workspace = true }
 leafwing-input-manager = { workspace = true }
 
 [[bin]]
