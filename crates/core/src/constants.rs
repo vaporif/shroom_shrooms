@@ -42,8 +42,6 @@ pub const WISP_SENSE_RADIUS_HEX: u32 = 5;
 
 pub const BIAS_GLOW_VISIBLE_THRESHOLD: f32 = 0.05;
 
-pub const HIVE_COUNT: u32 = 6;
-
 pub const HIVE_PRODUCTION_SUGAR_COST: f32 = 1.0;
 pub const HIVE_PRODUCTION_RATE: f32 = 0.05;
 pub const UNIT_UPKEEP_SUGAR: f32 = 0.1;
