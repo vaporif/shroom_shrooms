@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use clap::Parser;
-use kingdom_core::{LaunchConfig, default_seed};
+use kingdom_core::{
+    default_hive_count, default_seed, LaunchConfig, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
+};
 
 mod cli;
 mod debug;
@@ -13,13 +15,21 @@ use plugins::KingdomPlugins;
 fn main() {
     let args = Args::parse();
     let seed = args.seed.unwrap_or_else(default_seed);
+    let width = args.width.unwrap_or(DEFAULT_MAP_WIDTH);
+    let height = args.height.unwrap_or(DEFAULT_MAP_HEIGHT);
+    let hives = args
+        .hives
+        .unwrap_or_else(|| default_hive_count(width, height))
+        .max(1);
 
     let mut app = App::new();
-    app.insert_resource(LaunchConfig { seed }).add_plugins((
-        DefaultPlugins,
-        KingdomPlugins,
-        DebugPlugin,
-    ));
+    app.insert_resource(LaunchConfig {
+        seed,
+        width,
+        height,
+        hives,
+    })
+    .add_plugins((DefaultPlugins, KingdomPlugins, DebugPlugin));
 
     if let Some(path) = args.dump_schedule {
         let dot = bevy_mod_debugdump::schedule_graph_dot(
