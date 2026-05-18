@@ -2136,7 +2136,7 @@ pub fn found_network_input_system(
 
 Register `found_network_input_system` in the `InputPlugin` `Update` tuple in `crates/input/src/lib.rs`, and re-export it.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 Run: `git add -A && git commit -m "units: found new networks from idle founders"`
 
