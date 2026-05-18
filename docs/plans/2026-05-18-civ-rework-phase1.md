@@ -2140,7 +2140,7 @@ Register `found_network_input_system` in the `InputPlugin` `Update` tuple in `cr
 
 Run: `git add -A && git commit -m "units: found new networks from idle founders"`
 
-- [ ] **Step 11: Add the founder panel to the HUD**
+- [x] **Step 11: Add the founder panel to the HUD**
 
 In `crates/ui/src/hud.rs`, add a unit panel that appears when `SelectedUnit` is set, with a "Found Network" button. Add a marker component and spawn the panel hidden in `spawn_hud`:
 
@@ -2186,12 +2186,12 @@ pub fn update_unit_panel(
 
 `selected` here may hold a stale `Entity` once a founder is despawned by founding — `units.get(e).ok()` returns `None` and the panel simply hides, so no special handling is needed. `kingdom_ui` needs `kingdom_units` as a dependency — add `kingdom_units = { workspace = true }` to `crates/ui/Cargo.toml`. Register `update_unit_panel` in the `HudPlugin` `Update` tuple, and import `GridPos` as needed.
 
-- [ ] **Step 12: Verify build, lint, tests**
+- [x] **Step 12: Verify build, lint, tests**
 
 Run: `just lint && cargo nextest run -p kingdom_units -p kingdom_render -p kingdom_ui -p kingdom_input`
 Expected: PASS.
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 Run: `git add -A && git commit -m "render+ui: founder panel with Found Network button"`
 

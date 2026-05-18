@@ -1,6 +1,6 @@
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use kingdom_core::{GameState, LaunchConfig, RegionStates, SimulationSpeed};
+use kingdom_core::{GameState, GridPos, LaunchConfig, RegionStates, SimulationSpeed};
 use kingdom_input::SelectedRegion;
 
 #[derive(Resource, Debug, Reflect)]
@@ -26,6 +26,12 @@ pub struct SpeedDisplayText;
 
 #[derive(Component)]
 pub struct HintsPanel;
+
+#[derive(Component)]
+pub struct UnitPanel;
+
+#[derive(Component)]
+pub struct FoundNetworkButton;
 
 pub fn spawn_hud(mut commands: Commands) {
     commands
@@ -112,6 +118,45 @@ pub fn spawn_hud(mut commands: Commands) {
                     TextColor(Color::srgb(0.9, 0.9, 0.9)),
                 ));
             }
+        });
+
+    // Unit panel (bottom-left), shown only while an idle founder is selected.
+    commands
+        .spawn((
+            UnitPanel,
+            Visibility::Hidden,
+            Node {
+                position_type: PositionType::Absolute,
+                bottom: Val::Px(10.0),
+                left: Val::Px(10.0),
+                padding: UiRect::all(Val::Px(8.0)),
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(4.0),
+                ..default()
+            },
+            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.6)),
+        ))
+        .with_children(|parent| {
+            parent
+                .spawn((
+                    FoundNetworkButton,
+                    Button,
+                    Node {
+                        padding: UiRect::all(Val::Px(6.0)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::srgb(0.2, 0.4, 0.2)),
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new("Found Network"),
+                        TextFont {
+                            font_size: 14.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                    ));
+                });
         });
 }
 
@@ -221,5 +266,39 @@ pub fn update_hud(inputs: HudInputs, mut texts: HudTexts) {
         } else {
             Visibility::Hidden
         };
+    }
+}
+
+pub fn update_unit_panel(
+    selected: Res<kingdom_core::SelectedUnit>,
+    units: Query<(&kingdom_core::Unit, &GridPos, &kingdom_core::UnitMovement)>,
+    grid: Res<kingdom_core::GridWorld>,
+    tiles: Query<&mut kingdom_core::Tile>,
+    mut panel: Query<&mut Visibility, With<UnitPanel>>,
+    interaction: Query<&Interaction, (Changed<Interaction>, With<FoundNetworkButton>)>,
+    mut request: ResMut<kingdom_core::FoundNetworkRequest>,
+) {
+    let founder = selected
+        .0
+        .and_then(|e| units.get(e).ok())
+        .filter(|(u, _, m)| u.kind == kingdom_core::UnitKind::Founder && m.path.is_empty());
+
+    if let Ok(mut vis) = panel.single_mut() {
+        *vis = if founder.is_some() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+    }
+    let Some((_, gpos, _)) = founder else {
+        return;
+    };
+    let on_valid_site = kingdom_units::is_valid_site(gpos.0, &grid, &tiles);
+    if on_valid_site
+        && interaction
+            .iter()
+            .any(|i| matches!(i, Interaction::Pressed))
+    {
+        request.0 = true;
     }
 }

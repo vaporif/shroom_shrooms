@@ -5,7 +5,7 @@ mod hud;
 mod slot_machine_ui;
 mod tile_popover;
 
-pub use hud::{HintsVisible, spawn_hud, update_hud};
+pub use hud::{HintsVisible, spawn_hud, update_hud, update_unit_panel};
 pub use slot_machine_ui::{
     SlotMachineState, slot_machine_selection_system, slot_machine_ui_system,
 };
@@ -17,7 +17,7 @@ impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<HintsVisible>()
             .add_systems(Startup, spawn_hud)
-            .add_systems(Update, (update_hud, update_tile_popover));
+            .add_systems(Update, (update_hud, update_tile_popover, update_unit_panel));
     }
 }
 
