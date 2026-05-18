@@ -14,6 +14,7 @@ pub fn hive_production_system(
         .iter()
         .filter(|(_, h)| h.captured_by.is_some())
         .count() as u32;
+    // Phase 1: a single global unit cap/pool; per-network caps come later.
     let cap = UNIT_CAP_BASE + captured_hives * UNIT_CAP_PER_HIVE;
     let mut living = units.iter().count() as u32;
 
@@ -151,6 +152,79 @@ mod tests {
         assert!(
             (drained - 0.4).abs() < 1e-4,
             "only upkeep drained, not production"
+        );
+    }
+
+    #[test]
+    fn production_stalls_when_region_has_no_sugars() {
+        let mut app = test_app();
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+        // Owner region is broke: the `sugars <= 0.0` early-continue must fire.
+        app.world_mut()
+            .resource_mut::<RegionStates>()
+            .get_mut(rid)
+            .unwrap()
+            .sugars = 0.0;
+        let hive = app
+            .world_mut()
+            .spawn((
+                GridPos(hexx::Hex::new(0, 0)),
+                Hive {
+                    captured_by: Some(rid),
+                    production: 0.95,
+                },
+            ))
+            .id();
+        app.update();
+        let founders = app.world_mut().query::<&Unit>().iter(app.world()).count();
+        assert_eq!(founders, 0, "no founder spawned without sugars");
+        assert_eq!(
+            app.world().get::<Hive>(hive).unwrap().production,
+            0.95,
+            "production does not advance while the region is broke",
+        );
+    }
+
+    #[test]
+    fn cap_blocks_second_hive_finishing_same_tick() {
+        let mut app = test_app();
+        let rid = app
+            .world_mut()
+            .resource_mut::<RegionStates>()
+            .create_region();
+        app.world_mut()
+            .resource_mut::<RegionStates>()
+            .get_mut(rid)
+            .unwrap()
+            .sugars = 100.0;
+        // Two captured hives → cap is UNIT_CAP_BASE + 2 * UNIT_CAP_PER_HIVE = 6.
+        // Pre-spawn 5 units so exactly one slot remains free this tick.
+        for _ in 0..5 {
+            app.world_mut().spawn((
+                GridPos(hexx::Hex::new(9, 9)),
+                Unit {
+                    kind: UnitKind::Founder,
+                    owner: rid,
+                },
+            ));
+        }
+        for _ in 0..2 {
+            app.world_mut().spawn((
+                GridPos(hexx::Hex::new(0, 0)),
+                Hive {
+                    captured_by: Some(rid),
+                    production: 0.99,
+                },
+            ));
+        }
+        app.update();
+        let founders = app.world_mut().query::<&Unit>().iter(app.world()).count();
+        assert_eq!(
+            founders, 6,
+            "the `living += 1` re-check stops the second hive at the cap",
         );
     }
 
