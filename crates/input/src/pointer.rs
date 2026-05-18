@@ -54,8 +54,7 @@ pub fn pointer_system(
     layout: Res<HexLayout>,
     grid: Res<GridWorld>,
     tiles: Query<&Tile>,
-    units: Query<(Entity, &GridPos)>,
-    unit_lookup: Query<(Entity, &GridPos, &Unit)>,
+    units: Query<(Entity, &GridPos, &Unit)>,
     mut movements: Query<&mut UnitMovement>,
     mut selected: ResMut<SelectedUnit>,
     mut taps: MessageWriter<TileTapped>,
@@ -74,13 +73,13 @@ pub fn pointer_system(
         return;
     };
 
-    if let Some(unit) = unit_at(hex, unit_lookup.iter()) {
+    if let Some(unit) = unit_at(hex, units.iter()) {
         selected.0 = Some(unit);
         return;
     }
 
     if let Some(unit) = selected.0
-        && let Ok((_, start)) = units.get(unit)
+        && let Ok((_, start, _)) = units.get(unit)
     {
         let path = find_path(start.0, hex, &grid, |h| {
             grid.tiles

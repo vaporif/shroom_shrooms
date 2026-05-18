@@ -29,6 +29,11 @@ impl Plugin for UnitsPlugin {
                     .in_set(SimulationSystems)
                     .after(region_tracking_system),
             )
+            // Runs every frame, ungated by `SimulationSystems` and with no
+            // explicit ordering: units move in real time, decoupled from the
+            // simulation tick. A 1-frame ordering jitter against
+            // `pointer_system` (which writes the path) is harmless — the unit
+            // simply starts moving on the next frame.
             .add_systems(Update, unit_movement_system);
     }
 }
