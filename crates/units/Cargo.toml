@@ -10,3 +10,7 @@ hexx = { workspace = true }
 pathfinding = { workspace = true }
 kingdom_core = { workspace = true }
 kingdom_world = { workspace = true }
+
+[dev-dependencies]
+kingdom_growth = { workspace = true }
+rand = { workspace = true }

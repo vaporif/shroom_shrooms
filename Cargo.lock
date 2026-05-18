@@ -4165,8 +4165,10 @@ dependencies = [
  "bevy",
  "hexx",
  "kingdom_core",
+ "kingdom_growth",
  "kingdom_world",
  "pathfinding",
+ "rand 0.10.1",
 ]
 
 [[package]]

@@ -2206,7 +2206,7 @@ Prove the full Phase 1 loop end-to-end with integration tests, and confirm the w
 - Create: `crates/input/tests/wisp_mode_gate.rs`
 - Modify: `crates/units/Cargo.toml`, `crates/input/Cargo.toml` (dev-dependencies)
 
-- [ ] **Step 1: Add dev-dependencies for integration tests**
+- [x] **Step 1: Add dev-dependencies for integration tests**
 
 Add to `crates/units/Cargo.toml`:
 
@@ -2225,7 +2225,7 @@ kingdom_units = { workspace = true }
 
 (`kingdom_units` is already a normal dependency of `kingdom_input` from Task 4; the dev-dep line is harmless but optional — skip it if already present.)
 
-- [ ] **Step 2: Write the `grow_to_capture_hive` integration test**
+- [x] **Step 2: Write the `grow_to_capture_hive` integration test**
 
 Create `crates/units/tests/civ_loop.rs`. Each test builds a `MinimalPlugins` app, wires the relevant systems, and drives ticks. Start with capture:
 
@@ -2281,12 +2281,12 @@ fn grow_to_capture_hive() {
 }
 ```
 
-- [ ] **Step 3: Run it**
+- [x] **Step 3: Run it**
 
 Run: `cargo nextest run -p kingdom_units --test civ_loop grow_to_capture_hive`
 Expected: PASS.
 
-- [ ] **Step 4: Add `captured_hive_produces_founder` and `unit_cap_blocks_overproduction`**
+- [x] **Step 4: Add `captured_hive_produces_founder` and `unit_cap_blocks_overproduction`**
 
 Append to `crates/units/tests/civ_loop.rs`:
 
@@ -2335,7 +2335,7 @@ fn unit_cap_blocks_overproduction() {
 }
 ```
 
-- [ ] **Step 5: Add `upkeep_drains_idle_units` and `two_networks_merge_pools_resources`**
+- [x] **Step 5: Add `upkeep_drains_idle_units` and `two_networks_merge_pools_resources`**
 
 Append to `crates/units/tests/civ_loop.rs`:
 
@@ -2388,7 +2388,7 @@ fn two_networks_merge_pools_resources() {
 }
 ```
 
-- [ ] **Step 6: Add `founder_walks_and_founds_network`**
+- [x] **Step 6: Add `founder_walks_and_founds_network`**
 
 Append to `crates/units/tests/civ_loop.rs`. This drives `unit_movement_system` and `founding_system`:
 
@@ -2447,12 +2447,12 @@ fn founder_walks_and_founds_network() {
 }
 ```
 
-- [ ] **Step 7: Run all civ_loop tests**
+- [x] **Step 7: Run all civ_loop tests**
 
 Run: `cargo nextest run -p kingdom_units --test civ_loop`
 Expected: PASS — all six integration tests green.
 
-- [ ] **Step 8: Write the `wisp_mode_gates_painting` test**
+- [x] **Step 8: Write the `wisp_mode_gates_painting` test**
 
 Create `crates/input/tests/wisp_mode_gate.rs`. Driving the full `wisp_input_system` needs a window and camera, which a headless test cannot provide. Instead this test verifies the gate at the unit level: with `WispMode` released, the system sets the wisp phase to `Idle` and writes no bias. Build an app with the action state and assert the early-return path:
 
@@ -2483,22 +2483,22 @@ fn wisp_state_defaults_idle() {
 
 `Action`, `WispState`, `WispPhase`, and `default_input_map` must be `pub` exports of `kingdom_input` — `Action` and `default_input_map` already are (`crates/input/src/lib.rs:10`); `WispState`/`WispPhase` already are (`:15`). The `leafwing` `InputMap::get` API name should be confirmed against version 0.20 — if `get` differs, adjust to the equivalent accessor; the assertion intent (the binding is non-empty) is fixed.
 
-- [ ] **Step 9: Run the wisp gate test**
+- [x] **Step 9: Run the wisp gate test**
 
 Run: `cargo nextest run -p kingdom_input --test wisp_mode_gate`
 Expected: PASS.
 
-- [ ] **Step 10: Full verification — lint and the whole test suite**
+- [x] **Step 10: Full verification — lint and the whole test suite**
 
 Run: `just lint && just test`
 Expected: PASS — `cargo fmt` clean, clippy clean across the workspace (including the new `kingdom_units` crate), and every test green.
 
-- [ ] **Step 11: Verify the game still builds and the win condition is intact**
+- [x] **Step 11: Verify the game still builds and the win condition is intact**
 
 Run: `cargo build -p kingdom && cargo nextest run -p kingdom_fruiting -p kingdom_regions`
 Expected: PASS — the binary compiles with `UnitsPlugin` registered, and the fruiting/region win-path tests still pass. The win condition (`GameState::victory`) was not touched, so fragments-fused-plus-mushrooms-fruited still wins.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 Run: `git add -A && git commit -m "tests: Phase 1 civ-loop and wisp-gate integration coverage"`
 
