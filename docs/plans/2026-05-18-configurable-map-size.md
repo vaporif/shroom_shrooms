@@ -243,7 +243,7 @@ Run: `git add -A && git commit -m "world: configurable map dimensions and area-s
 
 `spawn_terrain_tilemap` already takes `grid: Res<GridWorld>` — `GridWorld` has `width: i32` / `height: i32`. Two functions use the consts beyond that system: `depth_lit_color(hex)` (the depth gradient needs the map height) and its caller `tile_color_for(discovery, hex)`. Both gain a `height` parameter. `terrain_tile_update_system` calls `tile_color_for` and so needs `Res<GridWorld>` too.
 
-- [ ] **Step 1: Delete the local consts**
+- [x] **Step 1: Delete the local consts**
 
 Remove these two lines (and the `// TODO: to change` comment above them) from `crates/render/src/terrain_render.rs`:
 
@@ -253,7 +253,7 @@ const MAP_WIDTH: u32 = 80;
 const MAP_HEIGHT: u32 = 60;
 ```
 
-- [ ] **Step 2: Thread `height` through `depth_lit_color` and `tile_color_for`**
+- [x] **Step 2: Thread `height` through `depth_lit_color` and `tile_color_for`**
 
 ```rust
 fn depth_lit_color(hex: Hex, map_height: u32) -> LinearRgba {
@@ -271,7 +271,7 @@ fn tile_color_for(discovery: &DiscoveryMap, hex: Hex, map_height: u32) -> Color 
 
 The `denom` guard keeps a 0- or 1-row map (or an empty `GridWorld` before generation) from dividing by zero or a negative.
 
-- [ ] **Step 3: Read dimensions from `GridWorld` in `spawn_terrain_tilemap`**
+- [x] **Step 3: Read dimensions from `GridWorld` in `spawn_terrain_tilemap`**
 
 In `spawn_terrain_tilemap`, replace the `TilemapSize` construction. Add, near the top of the function:
 
@@ -292,7 +292,7 @@ Update the `tile_color_for` call in the tile loop to pass `map_h`:
             color: TileColor(tile_color_for(&discovery, hex, map_h)),
 ```
 
-- [ ] **Step 4: Give `terrain_tile_update_system` the map height**
+- [x] **Step 4: Give `terrain_tile_update_system` the map height**
 
 Add `grid: Res<GridWorld>` to the system's parameters. Near the top of the body:
 
@@ -306,7 +306,7 @@ Update both `tile_color_for` calls (the per-changed-tile path and the discovery 
         color.0 = tile_color_for(&discovery, gpos.0, map_h);
 ```
 
-- [ ] **Step 5: Fix the `depth_gradient_top_is_warm_bottom_is_cool` test**
+- [x] **Step 5: Fix the `depth_gradient_top_is_warm_bottom_is_cool` test**
 
 In the `tests` module, that test calls `depth_lit_color(hex)` and uses `MAP_HEIGHT`. Give it an explicit height. Add a test const at the top of the `tests` module:
 
@@ -318,12 +318,12 @@ Then update the test's two `depth_lit_color` calls to pass `TEST_MAP_HEIGHT`, an
 
 The `tilemap_tests` module uses offset-coordinate literals (`[79, 0]`, `[0, 59]`, etc.) rather than the consts, so it compiles unchanged.
 
-- [ ] **Step 6: Build and test the render crate**
+- [x] **Step 6: Build and test the render crate**
 
 Run: `cargo nextest run -p kingdom_render`
 Expected: PASS — all render tests green.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run: `git add -A && git commit -m "render: read map dimensions from GridWorld"`
 
