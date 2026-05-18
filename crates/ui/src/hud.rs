@@ -96,8 +96,9 @@ pub fn spawn_hud(mut commands: Commands) {
             let hints = [
                 "WASD \u{2014} Pan camera",
                 "Scroll \u{2014} Zoom",
-                "Click \u{2014} Inspect tile",
-                "Click+drag \u{2014} Paint growth direction",
+                "Click \u{2014} Select unit / inspect tile",
+                "Hold E + drag \u{2014} Paint growth",
+                "F \u{2014} Found network",
                 "Space \u{2014} Pause  |  +/- Speed",
                 "H \u{2014} Hide hints",
             ];

@@ -6,5 +6,7 @@ license-file.workspace = true
 
 [dependencies]
 bevy = { workspace = true }
+hexx = { workspace = true }
 kingdom_core = { workspace = true }
+kingdom_units = { workspace = true }
 leafwing-input-manager = { workspace = true }

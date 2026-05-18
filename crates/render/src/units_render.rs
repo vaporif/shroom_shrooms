@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use kingdom_core::{GridPos, HexLayout, Hive, Unit};
+use kingdom_core::{GridPos, HexLayout, Hive, SelectedUnit, Unit, UnitMovement};
 
 use crate::assets::EntitySprites;
 use crate::entity_render::organism_sprite_size;
@@ -112,5 +112,64 @@ pub fn despawn_unit_sprites(
         if gone.contains(&link.0) {
             commands.entity(sprite_e).despawn();
         }
+    }
+}
+
+const SELECTION_RING_Z: f32 = 2.4;
+
+/// Per-frame: place each unit sprite by interpolating between its `GridPos`
+/// and the next path hex by `edge_progress`. The small unit sprite physically
+/// travels hex-centre to hex-centre, visibly crossing each hex it traverses.
+pub fn unit_position_system(
+    layout: Res<HexLayout>,
+    units: Query<(&GridPos, &UnitMovement)>,
+    mut sprites: Query<(&UnitSprite, &mut Transform)>,
+) {
+    for (link, mut transform) in &mut sprites {
+        let Ok((gpos, movement)) = units.get(link.0) else {
+            continue;
+        };
+        let from = layout.hex_to_world_pos(gpos.0);
+        let world = match movement.path.first() {
+            Some(&next) => from.lerp(layout.hex_to_world_pos(next), movement.edge_progress),
+            None => from,
+        };
+        transform.translation = world.extend(UNIT_Z);
+    }
+}
+
+#[derive(Component)]
+pub struct SelectionRing;
+
+/// Spawn/move/despawn a ring sprite that follows `SelectedUnit`.
+pub fn selection_ring_system(
+    mut commands: Commands,
+    selected: Res<SelectedUnit>,
+    layout: Res<HexLayout>,
+    units: Query<(&GridPos, &UnitMovement)>,
+    rings: Query<Entity, With<SelectionRing>>,
+) {
+    let target = selected.0.and_then(|e| units.get(e).ok());
+    match (target, rings.iter().next()) {
+        (None, Some(ring)) => commands.entity(ring).despawn(),
+        (Some((gpos, movement)), existing) => {
+            let from = layout.hex_to_world_pos(gpos.0);
+            let world = match movement.path.first() {
+                Some(&next) => from.lerp(layout.hex_to_world_pos(next), movement.edge_progress),
+                None => from,
+            };
+            // Ring hugs the small unit body, not the hex.
+            let size = organism_sprite_size(&layout) * UNIT_SPRITE_FRACTION * 1.6;
+            let ring = existing.unwrap_or_else(|| commands.spawn(SelectionRing).id());
+            commands.entity(ring).insert((
+                Sprite {
+                    color: Color::srgba(1.0, 1.0, 0.4, 0.7),
+                    custom_size: Some(size),
+                    ..default()
+                },
+                Transform::from_translation(world.extend(SELECTION_RING_Z)),
+            ));
+        }
+        (None, None) => {}
     }
 }

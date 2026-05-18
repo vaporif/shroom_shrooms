@@ -120,6 +120,10 @@ pub fn wisp_input_system(
         wisp.phase = WispPhase::Idle;
         return;
     }
+    if !input.actions.pressed(&Action::WispMode) {
+        wisp.phase = WispPhase::Idle;
+        return;
+    }
     if input.ui_blocking() {
         return;
     }

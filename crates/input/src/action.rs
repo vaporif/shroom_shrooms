@@ -10,6 +10,9 @@ pub enum Action {
 
     Paint,
 
+    WispMode,
+    FoundNetwork,
+
     TogglePause,
     SpeedUp,
     SlowDown,
@@ -24,6 +27,9 @@ pub fn default_input_map() -> InputMap<Action> {
     map.insert_axis(Action::Zoom, MouseScrollAxis::Y);
 
     map.insert(Action::Paint, MouseButton::Left);
+
+    map.insert(Action::WispMode, KeyCode::KeyE);
+    map.insert(Action::FoundNetwork, KeyCode::KeyF);
 
     map.insert(Action::TogglePause, KeyCode::Space);
     map.insert(Action::SpeedUp, KeyCode::Equal);

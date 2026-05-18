@@ -64,6 +64,8 @@ impl Plugin for RenderPlugin {
                     units_render::hive_tint_system,
                     units_render::spawn_unit_sprites,
                     units_render::despawn_unit_sprites,
+                    units_render::unit_position_system,
+                    units_render::selection_ring_system,
                     atmosphere::update_vignette,
                 ),
             );

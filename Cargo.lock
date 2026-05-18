@@ -4120,7 +4120,9 @@ name = "kingdom_input"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "hexx",
  "kingdom_core",
+ "kingdom_units",
  "leafwing-input-manager",
 ]
 

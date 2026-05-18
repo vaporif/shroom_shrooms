@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use kingdom_core::{GridPos, SimulationSpeed, UnitMovement, UNIT_SPEED_HEXES_PER_SEC};
+use kingdom_core::{GridPos, SimulationSpeed, UNIT_SPEED_HEXES_PER_SEC, UnitMovement};
 
 pub fn unit_movement_system(
     time: Res<Time>,

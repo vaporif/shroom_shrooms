@@ -3,13 +3,17 @@ use leafwing_input_manager::prelude::*;
 
 mod action;
 mod camera;
+mod cursor;
+mod pointer;
 mod selection;
 mod speed;
 mod wisp;
 
 pub use action::{Action, default_input_map};
 pub use camera::{GameCamera, camera_system, spawn_camera};
-pub use kingdom_core::SelectedRegion;
+pub use cursor::cursor_system;
+pub use kingdom_core::{SelectedRegion, SelectedUnit};
+pub use pointer::pointer_system;
 pub use selection::selection_system;
 pub use speed::speed_input_system;
 pub use wisp::{TileTapped, WispPhase, WispState, wisp_input_system};
@@ -22,6 +26,7 @@ impl Plugin for InputPlugin {
             .insert_resource(default_input_map())
             .init_resource::<ActionState<Action>>()
             .init_resource::<WispState>()
+            .init_resource::<SelectedUnit>()
             .add_message::<TileTapped>()
             .add_systems(Startup, spawn_camera)
             .add_systems(
@@ -29,6 +34,8 @@ impl Plugin for InputPlugin {
                 (
                     camera_system,
                     wisp_input_system,
+                    pointer_system,
+                    cursor_system,
                     selection_system,
                     speed_input_system,
                 ),

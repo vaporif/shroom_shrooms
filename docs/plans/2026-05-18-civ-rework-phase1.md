@@ -1560,11 +1560,11 @@ Expected: PASS — the unit advances at Normal speed and stays put while Paused.
 
 (alongside the existing `SimulationSystems` chain registration).
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 Run: `git add -A && git commit -m "units: A* pathfinding and real-time unit movement"`
 
-- [ ] **Step 13: Add the new input actions**
+- [x] **Step 13: Add the new input actions**
 
 In `crates/input/src/action.rs`, add the two variants to the `Action` enum:
 
@@ -1580,7 +1580,7 @@ In `default_input_map`, add the bindings:
     map.insert(Action::FoundNetwork, KeyCode::KeyF);
 ```
 
-- [ ] **Step 14: Gate the wisp behind `WispMode`**
+- [x] **Step 14: Gate the wisp behind `WispMode`**
 
 In `crates/input/src/wisp.rs`, `wisp_input_system` (line 111), add an early return right after the `GamePhase` check:
 
@@ -1593,7 +1593,7 @@ In `crates/input/src/wisp.rs`, `wisp_input_system` (line 111), add an early retu
 
 `input.actions` is the `ActionState<Action>` already in the `WispInput` `SystemParam`. Place this before the `ui_blocking` check.
 
-- [ ] **Step 15: Write the failing test for `pointer_system`**
+- [x] **Step 15: Write the failing test for `pointer_system`**
 
 Create `crates/input/src/pointer.rs` with the test module. `pointer_system` reads the cursor, so the unit tests cover the pure resolution logic only; full cursor behaviour is covered by the Task 6 integration test. Test the helper that resolves a click:
 
@@ -1620,12 +1620,12 @@ mod tests {
 }
 ```
 
-- [ ] **Step 16: Run the test to verify it fails**
+- [x] **Step 16: Run the test to verify it fails**
 
 Run: `cargo nextest run -p kingdom_input pointer`
 Expected: FAIL — `pointer` module / `unit_at` undefined.
 
-- [ ] **Step 17: Implement `pointer_system`**
+- [x] **Step 17: Implement `pointer_system`**
 
 Prepend to `crates/input/src/pointer.rs`. `kingdom_input` needs `kingdom_units` as a dependency for `find_path` — add `kingdom_units = { workspace = true }` to `crates/input/Cargo.toml` `[dependencies]`.
 
@@ -1728,12 +1728,12 @@ pub fn pointer_system(
 }
 ```
 
-- [ ] **Step 18: Run the test to verify it passes**
+- [x] **Step 18: Run the test to verify it passes**
 
 Run: `cargo nextest run -p kingdom_input pointer`
 Expected: PASS — `unit_at` resolves a click on a unit hex.
 
-- [ ] **Step 19: Implement `cursor_system`**
+- [x] **Step 19: Implement `cursor_system`**
 
 Create `crates/input/src/cursor.rs`:
 
@@ -1766,7 +1766,7 @@ pub fn cursor_system(
 
 The exact path to `CursorIcon` / `SystemCursorIcon` in Bevy 0.18 must be confirmed against the installed version — run `cargo doc` or grep the bevy source if the imports above fail. The behaviour (crosshair when `WispMode` held) is fixed; only the import path may need adjusting.
 
-- [ ] **Step 20: Register pointer and cursor in `InputPlugin`**
+- [x] **Step 20: Register pointer and cursor in `InputPlugin`**
 
 In `crates/input/src/lib.rs`, add `mod pointer;` and `mod cursor;`, re-export `pub use pointer::pointer_system;` and `pub use cursor::cursor_system;`, re-export `pub use kingdom_core::SelectedUnit;`, and add both systems to the `Update` tuple alongside `wisp_input_system`. Order `pointer_system` after `wisp_input_system` so the wisp's `WispMode` early-return and the pointer's gate never both fire:
 
@@ -1781,7 +1781,7 @@ In `crates/input/src/lib.rs`, add `mod pointer;` and `mod cursor;`, re-export `p
                 ),
 ```
 
-- [ ] **Step 21: Interpolate unit sprite position and draw the selection ring**
+- [x] **Step 21: Interpolate unit sprite position and draw the selection ring**
 
 Append to `crates/render/src/units_render.rs`:
 
@@ -1850,7 +1850,7 @@ pub fn selection_ring_system(
 
 Fold the new `use kingdom_core::{...}` items into the existing import line.
 
-- [ ] **Step 22: Register the new render systems**
+- [x] **Step 22: Register the new render systems**
 
 In `crates/render/src/lib.rs`, add to the `PostUpdate` tuple:
 
@@ -1859,7 +1859,7 @@ In `crates/render/src/lib.rs`, add to the `PostUpdate` tuple:
                     units_render::selection_ring_system,
 ```
 
-- [ ] **Step 23: Update the HUD hint text**
+- [x] **Step 23: Update the HUD hint text**
 
 In `crates/ui/src/hud.rs` `spawn_hud`, update the hints array to reflect the new controls:
 
@@ -1875,12 +1875,12 @@ In `crates/ui/src/hud.rs` `spawn_hud`, update the hints array to reflect the new
             ];
 ```
 
-- [ ] **Step 24: Verify build, lint, tests**
+- [x] **Step 24: Verify build, lint, tests**
 
 Run: `just lint && cargo nextest run -p kingdom_units -p kingdom_input -p kingdom_render -p kingdom_ui`
 Expected: PASS.
 
-- [ ] **Step 25: Commit**
+- [x] **Step 25: Commit**
 
 Run: `git add -A && git commit -m "input+render: unit control, wisp rebind, cursor swap, unit interpolation"`
 
