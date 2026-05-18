@@ -70,9 +70,8 @@ fn region_tint(id: u32) -> Color {
 
 const UNIT_Z: f32 = 2.5;
 
-/// Units render much smaller than a hex — a small body that visibly walks
-/// across the hex it is crossing, rather than a sprite that fills the tile.
-/// Fraction of the organism (hex-scale) sprite size; tuning value.
+/// Unit sprite size as a fraction of the hex-scale organism sprite, so a unit
+/// reads as a small body on the terrain rather than a tile-filling blob.
 const UNIT_SPRITE_FRACTION: f32 = 0.2;
 
 #[derive(Component)]
@@ -129,9 +128,7 @@ fn interpolated_world_pos(layout: &HexLayout, gpos: &GridPos, movement: &UnitMov
     }
 }
 
-/// Per-frame: place each unit sprite by interpolating between its `GridPos`
-/// and the next path hex by `edge_progress`. The small unit sprite physically
-/// travels hex-centre to hex-centre, visibly crossing each hex it traverses.
+/// Places each unit sprite at its interpolated mid-stride position every frame.
 pub fn unit_position_system(
     layout: Res<HexLayout>,
     units: Query<(&GridPos, &UnitMovement)>,
