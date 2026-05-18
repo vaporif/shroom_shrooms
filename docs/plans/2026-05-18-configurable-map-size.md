@@ -336,7 +336,7 @@ Raise the camera zoom-out limit so a 220-wide map is viewable, then verify the w
 **Files:**
 - Modify: `crates/input/src/camera.rs`
 
-- [ ] **Step 1: Raise `MAX_ZOOM`**
+- [x] **Step 1: Raise `MAX_ZOOM`**
 
 In `crates/input/src/camera.rs`, change:
 
@@ -350,31 +350,31 @@ to:
 const MAX_ZOOM: f32 = 12.0;
 ```
 
-- [ ] **Step 2: Update the `zoom_range_matches_spec` test**
+- [x] **Step 2: Update the `zoom_range_matches_spec` test**
 
 That test asserts `MAX_ZOOM == 4.0`. Change the assertion to `assert_eq!(MAX_ZOOM, 12.0);`. Leave `MIN_ZOOM` and `zoom_factor_is_multiplicative_uniform` alone — the multiplicative test derives its range from `MAX_ZOOM`/`MIN_ZOOM` and still holds.
 
-- [ ] **Step 3: Test the input crate**
+- [x] **Step 3: Test the input crate**
 
 Run: `cargo nextest run -p kingdom_input`
 Expected: PASS.
 
-- [ ] **Step 4: Full workspace lint and test**
+- [x] **Step 4: Full workspace lint and test**
 
 Run: `just lint && just test`
 Expected: PASS — `cargo fmt --check`, clippy, and `bevy_lint` clean; every test green. If `cargo fmt --check` fails because the editor's formatter hook ordered imports differently, run `just fmt` and re-run.
 
-- [ ] **Step 5: Verify the default resolves to 220x120**
+- [x] **Step 5: Verify the default resolves to 220x120**
 
 Run: `cargo nextest run -p kingdom_core config`
 Expected: PASS — `launch_config_default_dimensions_are_220x120` and `launch_config_default_hive_count_is_area_scaled` confirm the default `LaunchConfig` is 220x120 with 33 hives.
 
-- [ ] **Step 6: Smoke-build the binary**
+- [x] **Step 6: Smoke-build the binary**
 
 Run: `cargo build -p kingdom`
 Expected: PASS — the game builds with the new defaults. The map now generates at 220x120 (26,400 tiles) unless `--width` / `--height` override it; `--hives` overrides the area-scaled hive count.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run: `git add -A && git commit -m "input: widen camera zoom-out range for large maps"`
 

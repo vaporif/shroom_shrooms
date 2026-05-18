@@ -10,7 +10,7 @@ pub struct GameCamera;
 const CAMERA_SPEED: f32 = 300.0;
 const ZOOM_FACTOR_PER_TICK: f32 = 1.15;
 const MIN_ZOOM: f32 = 0.15;
-const MAX_ZOOM: f32 = 4.0;
+const MAX_ZOOM: f32 = 12.0;
 
 pub fn spawn_camera(mut commands: Commands, layout: Res<HexLayout>) {
     let center_hex =
@@ -56,7 +56,7 @@ mod tests {
     #[test]
     fn zoom_range_matches_spec() {
         assert_eq!(MIN_ZOOM, 0.15);
-        assert_eq!(MAX_ZOOM, 4.0);
+        assert_eq!(MAX_ZOOM, 12.0);
     }
 
     #[test]
@@ -66,8 +66,8 @@ mod tests {
         // in a small, uniform number of ticks.
         let ticks_to_traverse = (MAX_ZOOM / MIN_ZOOM).ln() / ZOOM_FACTOR_PER_TICK.ln();
         assert!(
-            ticks_to_traverse > 15.0 && ticks_to_traverse < 30.0,
-            "expected ~22 ticks to traverse range, got {ticks_to_traverse}"
+            ticks_to_traverse > 25.0 && ticks_to_traverse < 40.0,
+            "expected ~31 ticks to traverse range, got {ticks_to_traverse}"
         );
     }
 }

@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use clap::Parser;
 use kingdom_core::{
-    default_hive_count, default_seed, LaunchConfig, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
+    DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH, LaunchConfig, default_hive_count, default_seed,
 };
 
 mod cli;
