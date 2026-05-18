@@ -751,7 +751,7 @@ Expected: PASS — `UnitsPlugin` registers cleanly.
 
 Run: `git add -A && git commit -m "units: kingdom_units crate with hive capture"`
 
-- [ ] **Step 18: Add a hive sprite handle**
+- [x] **Step 18: Add a hive sprite handle**
 
 In `crates/render/src/assets.rs`, add a `hive` field to `EntitySprites` and load it. Phase 1 reuses the neutral-fungus sprite as a stand-in, so point `hive` at the same asset path:
 
@@ -770,7 +770,7 @@ pub struct EntitySprites {
 
 In `load_entity_sprites`, add: `sprites.hive = asset_server.load("sprites/neutral_fungus.png");`
 
-- [ ] **Step 19: Create the units render module — hive sprites**
+- [x] **Step 19: Create the units render module — hive sprites**
 
 Create `crates/render/src/units_render.rs`:
 
@@ -841,7 +841,7 @@ fn region_tint(id: u32) -> Color {
 
 `Hex` is unused here — drop the import if clippy flags it.
 
-- [ ] **Step 20: Register the hive render systems**
+- [x] **Step 20: Register the hive render systems**
 
 In `crates/render/src/lib.rs`, add `mod units_render;` and add the two systems to the `PostUpdate` tuple:
 
@@ -852,7 +852,7 @@ In `crates/render/src/lib.rs`, add `mod units_render;` and add the two systems t
 
 `organism_sprite_size` is already `pub` in `entity_render.rs:21`.
 
-- [ ] **Step 21: Show hive state in the tile popover**
+- [x] **Step 21: Show hive state in the tile popover**
 
 In `crates/ui/src/tile_popover.rs`, add a `hives` query to `TilePopoverInputs` and append hive state to the popover text. Add to the `SystemParam`:
 
@@ -874,12 +874,12 @@ Import `GridPos` and `Hive` from `kingdom_core` in the use list. In `resolve_pop
     Some(PopoverPayload { pos, text })
 ```
 
-- [ ] **Step 22: Verify build, lint, and tests**
+- [x] **Step 22: Verify build, lint, and tests**
 
 Run: `just lint && cargo nextest run -p kingdom_units -p kingdom_render -p kingdom_ui -p kingdom_world`
 Expected: PASS.
 
-- [ ] **Step 23: Commit**
+- [x] **Step 23: Commit**
 
 Run: `git add -A && git commit -m "render+ui: hive sprites tinted by capture, popover hive state"`
 

@@ -2,7 +2,8 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use kingdom_core::{
-    GridWorld, Hex, HexLayout, RegionStates, SelectedRegion, TerrainType, Tile, TileContents,
+    GridPos, GridWorld, Hex, HexLayout, Hive, RegionStates, SelectedRegion, TerrainType, Tile,
+    TileContents,
 };
 use kingdom_input::GameCamera;
 
@@ -22,6 +23,7 @@ pub struct TilePopoverInputs<'w, 's> {
     grid: Res<'w, GridWorld>,
     region_states: Res<'w, RegionStates>,
     tiles: Query<'w, 's, &'static Tile>,
+    hives: Query<'w, 's, (&'static GridPos, &'static Hive)>,
     camera_q: Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<GameCamera>>,
     windows: Query<'w, 's, &'static Window, With<PrimaryWindow>>,
 }
@@ -94,10 +96,18 @@ fn resolve_popover(inputs: &TilePopoverInputs, popover_size: Vec2) -> Option<Pop
         win.y - popover_size.y - POPOVER_MARGIN_PX,
     );
 
-    Some(PopoverPayload {
-        pos,
-        text: format_tile(hex, tile, &inputs.region_states),
-    })
+    let mut text = format_tile(hex, tile, &inputs.region_states);
+    if let Some((_, hive)) = inputs.hives.iter().find(|(gp, _)| gp.0 == hex) {
+        let owner = match hive.captured_by {
+            Some(rid) => format!("captured by Region {}", rid.0),
+            None => "neutral".into(),
+        };
+        text.push_str(&format!(
+            "\nHive: {owner}\nProduction: {:.0}%",
+            hive.production * 100.0
+        ));
+    }
+    Some(PopoverPayload { pos, text })
 }
 
 fn spawn_popover(commands: &mut Commands, payload: PopoverPayload) {

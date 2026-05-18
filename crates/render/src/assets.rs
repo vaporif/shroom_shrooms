@@ -7,6 +7,7 @@ pub struct EntitySprites {
     pub fauna: Handle<Image>,
     pub mushroom: Handle<Image>,
     pub neutral_fungus: Handle<Image>,
+    pub hive: Handle<Image>,
     pub loaded: bool,
 }
 
@@ -19,6 +20,7 @@ pub fn load_entity_sprites(mut sprites: ResMut<EntitySprites>, asset_server: Res
     sprites.fauna = asset_server.load("sprites/fauna.png");
     sprites.mushroom = asset_server.load("sprites/mushroom.png");
     sprites.neutral_fungus = asset_server.load("sprites/neutral_fungus.png");
+    sprites.hive = asset_server.load("sprites/neutral_fungus.png");
     sprites.loaded = true;
 }
 
@@ -34,5 +36,6 @@ mod tests {
         assert_eq!(sprites.fauna, Handle::default());
         assert_eq!(sprites.mushroom, Handle::default());
         assert_eq!(sprites.neutral_fungus, Handle::default());
+        assert_eq!(sprites.hive, Handle::default());
     }
 }
