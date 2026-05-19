@@ -9,10 +9,6 @@ use kingdom_core::{
 
 use crate::data_layer::DiscoveryMap;
 
-// TODO: to change
-const MAP_WIDTH: u32 = 80;
-const MAP_HEIGHT: u32 = 60;
-
 // Rendered tile size in world units. Larger than GRID_PX_W/H so adjacent tile
 // sprites overlap by ~5px and hex-edge AA seams don't show through.
 const TILE_PX_W: f32 = 54.0;
@@ -80,15 +76,16 @@ pub fn hex_to_tile_pos(hex: Hex) -> Option<TilePos> {
     })
 }
 
-fn depth_lit_color(hex: Hex) -> LinearRgba {
+fn depth_lit_color(hex: Hex, map_height: u32) -> LinearRgba {
     let [_, row] = hex.to_offset_coordinates(OffsetHexMode::Odd, HexOrientation::Pointy);
-    let depth = (row as f32 / (MAP_HEIGHT as f32 - 1.0)).clamp(0.0, 1.0);
+    let denom = (map_height.max(1) as f32 - 1.0).max(1.0);
+    let depth = (row as f32 / denom).clamp(0.0, 1.0);
     LIT_TOP.mix(&LIT_BOTTOM, depth)
 }
 
-fn tile_color_for(discovery: &DiscoveryMap, hex: Hex) -> Color {
+fn tile_color_for(discovery: &DiscoveryMap, hex: Hex, map_height: u32) -> Color {
     let level = discovery.discovered.get(&hex).copied().unwrap_or(0.0);
-    HIDDEN.mix(&depth_lit_color(hex), level).into()
+    HIDDEN.mix(&depth_lit_color(hex, map_height), level).into()
 }
 
 fn linear_to_srgb_byte(linear: f32) -> u8 {
@@ -169,10 +166,10 @@ pub fn spawn_terrain_tilemap(
 ) {
     let texture: Handle<Image> = images.add(build_terrain_atlas());
 
-    let map_size = TilemapSize {
-        x: MAP_WIDTH,
-        y: MAP_HEIGHT,
-    };
+    let map_w = grid.width.max(0) as u32;
+    let map_h = grid.height.max(0) as u32;
+
+    let map_size = TilemapSize { x: map_w, y: map_h };
     let tile_size = TilemapTileSize {
         x: TILE_PX_W,
         y: TILE_PX_H,
@@ -204,7 +201,7 @@ pub fn spawn_terrain_tilemap(
             position: tp,
             tilemap_id: TilemapId(tilemap_entity),
             texture_index: TileTextureIndex(terrain_type_index(tile.terrain)),
-            color: TileColor(tile_color_for(&discovery, hex)),
+            color: TileColor(tile_color_for(&discovery, hex, map_h)),
             ..Default::default()
         });
         storage.set(&tp, entity);
@@ -247,9 +244,12 @@ pub fn terrain_tile_update_system(
         Query<(&GridPos, &mut TileColor)>,
     )>,
     discovery: Res<DiscoveryMap>,
+    grid: Res<GridWorld>,
     untiled: Query<Entity, (With<Tile>, Without<TilePos>)>,
     mut warned_untiled: Local<bool>,
 ) {
+    let map_h = grid.height.max(0) as u32;
+
     // Warn exactly once if a tile entity lacks a TilePos — a stale spawn loop
     // would otherwise emit thousands of warnings per frame.
     if !*warned_untiled && let Some(entity) = untiled.iter().next() {
@@ -263,13 +263,13 @@ pub fn terrain_tile_update_system(
     // Path 1: per-changed-tile texture index + color refresh.
     for (tile, gpos, mut idx, mut color) in &mut sets.p0() {
         idx.0 = terrain_type_index(tile.terrain);
-        color.0 = tile_color_for(&discovery, gpos.0);
+        color.0 = tile_color_for(&discovery, gpos.0, map_h);
     }
 
     // Path 2: discovery sweep, exactly once per sim tick when DiscoveryMap mutates.
     if discovery.is_changed() {
         for (gpos, mut color) in &mut sets.p1() {
-            color.0 = tile_color_for(&discovery, gpos.0);
+            color.0 = tile_color_for(&discovery, gpos.0, map_h);
         }
     }
 }
@@ -277,6 +277,8 @@ pub fn terrain_tile_update_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TEST_MAP_HEIGHT: u32 = 60;
 
     #[test]
     fn terrain_base_color_returns_dark_palette() {
@@ -314,16 +316,18 @@ mod tests {
 
     #[test]
     fn depth_gradient_top_is_warm_bottom_is_cool() {
-        let top = depth_lit_color(Hex::from_offset_coordinates(
-            [0, 0],
-            OffsetHexMode::Odd,
-            HexOrientation::Pointy,
-        ));
-        let bottom = depth_lit_color(Hex::from_offset_coordinates(
-            [0, (MAP_HEIGHT - 1) as i32],
-            OffsetHexMode::Odd,
-            HexOrientation::Pointy,
-        ));
+        let top = depth_lit_color(
+            Hex::from_offset_coordinates([0, 0], OffsetHexMode::Odd, HexOrientation::Pointy),
+            TEST_MAP_HEIGHT,
+        );
+        let bottom = depth_lit_color(
+            Hex::from_offset_coordinates(
+                [0, (TEST_MAP_HEIGHT - 1) as i32],
+                OffsetHexMode::Odd,
+                HexOrientation::Pointy,
+            ),
+            TEST_MAP_HEIGHT,
+        );
         assert!(
             top.red > top.blue,
             "surface tint should be warm (red>blue), got {top:?}"
@@ -350,6 +354,11 @@ mod tilemap_tests {
     // private and do NOT leak through `super::*`. List every type used below
     // explicitly.
 
+    // Offset-coordinate literals below ([79, 0], [0, 59], ...) assume an 80x60
+    // grid, so the test GridWorld carries those dimensions.
+    const TEST_WIDTH: i32 = 80;
+    const TEST_HEIGHT: i32 = 60;
+
     fn test_app() -> App {
         let mut app = App::new();
         app.add_plugins((
@@ -361,7 +370,11 @@ mod tilemap_tests {
         // `app.sub_app_mut(RenderApp)` and panics in headless tests. Our tests
         // only mutate Tile* components directly and read tilemap-component
         // values back; they don't need the render pipeline. Skip the plugin.
-        app.init_resource::<GridWorld>();
+        app.insert_resource(GridWorld {
+            width: TEST_WIDTH,
+            height: TEST_HEIGHT,
+            ..Default::default()
+        });
         app.init_resource::<crate::data_layer::DiscoveryMap>();
         app.insert_resource(create_hex_layout());
         // Deliberately do NOT register `extract_discovery_map`: it calls

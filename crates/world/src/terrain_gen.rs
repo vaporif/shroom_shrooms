@@ -3,16 +3,16 @@ use std::collections::{HashMap, HashSet};
 use bevy::prelude::*;
 use hexx::{Hex, HexOrientation, OffsetHexMode};
 use kingdom_core::{
-    BacteriaColonyAgent, FragmentAgent, FragmentId, GameState, GridPos, GridWorld, HIVE_COUNT,
-    Hive, LaunchConfig, NeutralFungusAgent, PlantRootAgent, RegionId, RegionStates, TerrainType,
-    Tile, TileContents,
+    BacteriaColonyAgent, FragmentAgent, FragmentId, GameState, GridPos, GridWorld, Hive,
+    LaunchConfig, NeutralFungusAgent, PlantRootAgent, RegionId, RegionStates, TerrainType, Tile,
+    TileContents,
 };
 use rand::prelude::*;
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
 
-const MAP_WIDTH: i32 = 80;
-const MAP_HEIGHT: i32 = 60;
+/// Original map area (80x60) wildlife counts were tuned against.
+const BASELINE_AREA: i32 = 4800;
 
 const ROCK_PROB: f32 = 0.08;
 const WATER_PROB: f32 = 0.04;
@@ -26,6 +26,13 @@ const BACTERIA_SPREAD_INTERVAL: u32 = 10;
 /// Uses pointy-top orientation with odd-row offset, matching the project's hex layout.
 fn offset_to_hex(col: i32, row: i32) -> Hex {
     Hex::from_offset_coordinates([col, row], OffsetHexMode::Odd, HexOrientation::Pointy)
+}
+
+/// Scale a base spawn count by map area relative to the 80x60 baseline,
+/// clamped to at least 1 so a small map still gets some wildlife.
+fn area_scaled(base: u32, width: i32, height: i32) -> u32 {
+    let scale = (width * height) as f32 / BASELINE_AREA as f32;
+    ((base as f32 * scale).round() as u32).max(1)
 }
 
 #[derive(Clone, Copy)]
@@ -53,15 +60,23 @@ pub fn terrain_generation(
     config: Res<LaunchConfig>,
 ) {
     let mut rng = StdRng::seed_from_u64(config.seed);
-    grid.width = MAP_WIDTH;
-    grid.height = MAP_HEIGHT;
+    let (width, height) = (config.width, config.height);
+    grid.width = width;
+    grid.height = height;
 
-    let mut tile_data = build_tile_data(&mut rng);
-    let mut soil_pool = build_soil_pool(&tile_data, &mut rng);
-    let mut placements = place_features(&mut rng, &mut tile_data, &mut soil_pool, &mut game_state);
+    let mut tile_data = build_tile_data(&mut rng, width, height);
+    let mut soil_pool = build_soil_pool(&tile_data, &mut rng, width, height);
+    let mut placements = place_features(
+        &mut rng,
+        &mut tile_data,
+        &mut soil_pool,
+        &mut game_state,
+        width,
+        height,
+    );
 
     let player_rid = init_player_region(&mut region_states);
-    let player_start = offset_to_hex(MAP_WIDTH / 2, MAP_HEIGHT / 2);
+    let player_start = offset_to_hex(width / 2, height / 2);
     let player_hexes: HashSet<Hex> = player_start.range(2).collect();
 
     // Hives are separate entities, not tile contents, so they are not
@@ -73,21 +88,28 @@ pub fn terrain_generation(
         .copied()
         .filter(|h| h.unsigned_distance_to(player_start) > 6)
         .collect();
-    for _ in 0..HIVE_COUNT {
+    for _ in 0..config.hives {
         let Some(pos) = pop_unclaimed(&mut hive_pool, &placements.contents) else {
             break;
         };
         placements.hives.push(pos);
     }
 
-    let mut tile_buf = build_tile_buffer(&tile_data, &mut placements, player_rid, &player_hexes);
+    let mut tile_buf = build_tile_buffer(
+        &tile_data,
+        &mut placements,
+        player_rid,
+        &player_hexes,
+        width,
+        height,
+    );
     seed_radiation(&mut tile_buf, &mut rng);
     spawn_world_tiles(&mut commands, &mut grid, tile_buf);
     spawn_agents(&mut commands, placements);
 }
 
-fn pick_terrain(rng: &mut StdRng, y: i32, depth_ratio: f32) -> TerrainType {
-    if y == MAP_HEIGHT - 1 {
+fn pick_terrain(rng: &mut StdRng, y: i32, height: i32, depth_ratio: f32) -> TerrainType {
+    if y == height - 1 {
         return TerrainType::Surface;
     }
     if rng.random::<f32>() < ROCK_PROB * depth_ratio {
@@ -96,7 +118,7 @@ fn pick_terrain(rng: &mut StdRng, y: i32, depth_ratio: f32) -> TerrainType {
     if rng.random::<f32>() < WATER_PROB {
         return TerrainType::Water;
     }
-    if y > MAP_HEIGHT / 2 && rng.random::<f32>() < ROOT_PROB {
+    if y > height / 2 && rng.random::<f32>() < ROOT_PROB {
         return TerrainType::Root;
     }
     if rng.random::<f32>() < RUIN_PROB * depth_ratio {
@@ -108,14 +130,14 @@ fn pick_terrain(rng: &mut StdRng, y: i32, depth_ratio: f32) -> TerrainType {
     TerrainType::Soil
 }
 
-fn build_tile_data(rng: &mut StdRng) -> HashMap<Hex, TileBase> {
-    let mut data = HashMap::with_capacity((MAP_WIDTH * MAP_HEIGHT) as usize);
-    for y in 0..MAP_HEIGHT {
-        for x in 0..MAP_WIDTH {
+fn build_tile_data(rng: &mut StdRng, width: i32, height: i32) -> HashMap<Hex, TileBase> {
+    let mut data = HashMap::with_capacity((width * height) as usize);
+    for y in 0..height {
+        for x in 0..width {
             let hex = offset_to_hex(x, y);
-            let depth_ratio = 1.0 - (y as f32 / MAP_HEIGHT as f32);
-            let terrain = pick_terrain(rng, y, depth_ratio);
-            let moisture = (0.3 + 0.5 * (y as f32 / MAP_HEIGHT as f32) + rng.random::<f32>() * 0.2)
+            let depth_ratio = 1.0 - (y as f32 / height as f32);
+            let terrain = pick_terrain(rng, y, height, depth_ratio);
+            let moisture = (0.3 + 0.5 * (y as f32 / height as f32) + rng.random::<f32>() * 0.2)
                 .clamp(0.0, 1.0);
             let soil_richness = 0.2 + rng.random::<f32>() * 0.6;
             data.insert(
@@ -132,10 +154,15 @@ fn build_tile_data(rng: &mut StdRng) -> HashMap<Hex, TileBase> {
 }
 
 /// Soil hexes available for feature placement, excluding map borders and the surface row.
-fn build_soil_pool(tile_data: &HashMap<Hex, TileBase>, rng: &mut StdRng) -> Vec<Hex> {
+fn build_soil_pool(
+    tile_data: &HashMap<Hex, TileBase>,
+    rng: &mut StdRng,
+    width: i32,
+    height: i32,
+) -> Vec<Hex> {
     let mut pool = Vec::new();
-    for y in 1..MAP_HEIGHT - 2 {
-        for x in 1..MAP_WIDTH - 1 {
+    for y in 1..height - 2 {
+        for x in 1..width - 1 {
             let hex = offset_to_hex(x, y);
             if let Some(base) = tile_data.get(&hex)
                 && base.terrain == TerrainType::Soil
@@ -153,6 +180,8 @@ fn place_features(
     tile_data: &mut HashMap<Hex, TileBase>,
     soil_pool: &mut Vec<Hex>,
     game_state: &mut GameState,
+    width: i32,
+    height: i32,
 ) -> Placements {
     let mut p = Placements::default();
 
@@ -175,7 +204,8 @@ fn place_features(
         p.contents.insert(pos, TileContents::UniqueDecomposable(i));
     }
 
-    for i in 0..rng.random_range(2u32..=4) {
+    let fungi_count = area_scaled(rng.random_range(2u32..=4), width, height);
+    for i in 0..fungi_count {
         let Some(pos) = pop_unclaimed(soil_pool, &p.contents) else {
             break;
         };
@@ -184,9 +214,10 @@ fn place_features(
     }
 
     // Plants need proximity to surface; force terrain to Root regardless of base type.
-    for i in 0..rng.random_range(3u32..=6) {
-        let x = rng.random_range(0..MAP_WIDTH);
-        let y = rng.random_range(MAP_HEIGHT / 2..MAP_HEIGHT - 1);
+    let plant_count = area_scaled(rng.random_range(3u32..=6), width, height);
+    for i in 0..plant_count {
+        let x = rng.random_range(0..width);
+        let y = rng.random_range(height / 2..height - 1);
         let pos = offset_to_hex(x, y);
         if p.contents.contains_key(&pos) {
             continue;
@@ -198,7 +229,8 @@ fn place_features(
         p.plants.push((pos, i));
     }
 
-    for _ in 0..rng.random_range(1u32..=2) {
+    let bacteria_count = area_scaled(rng.random_range(1u32..=2), width, height);
+    for _ in 0..bacteria_count {
         let Some(pos) = pop_unclaimed(soil_pool, &p.contents) else {
             break;
         };
@@ -230,10 +262,12 @@ fn build_tile_buffer(
     placements: &mut Placements,
     player_rid: RegionId,
     player_hexes: &HashSet<Hex>,
+    width: i32,
+    height: i32,
 ) -> Vec<(Hex, Tile)> {
-    let mut buf = Vec::with_capacity((MAP_WIDTH * MAP_HEIGHT) as usize);
-    for y in 0..MAP_HEIGHT {
-        for x in 0..MAP_WIDTH {
+    let mut buf = Vec::with_capacity((width * height) as usize);
+    for y in 0..height {
+        for x in 0..width {
             let hex = offset_to_hex(x, y);
             let base = tile_data[&hex];
             let tile = if player_hexes.contains(&hex) {
@@ -352,13 +386,22 @@ mod tests {
     use super::*;
     use kingdom_core::RegionStates;
 
+    const TEST_WIDTH: i32 = 60;
+    const TEST_HEIGHT: i32 = 40;
+    const TEST_HIVES: u32 = 3;
+
     fn test_app() -> App {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
         app.init_resource::<GridWorld>();
         app.init_resource::<GameState>();
         app.init_resource::<RegionStates>();
-        app.insert_resource(LaunchConfig { seed: 12345 });
+        app.insert_resource(LaunchConfig {
+            seed: 12345,
+            width: TEST_WIDTH,
+            height: TEST_HEIGHT,
+            hives: TEST_HIVES,
+        });
         app
     }
 
@@ -369,9 +412,9 @@ mod tests {
         app.update();
 
         let grid = app.world().resource::<GridWorld>();
-        assert_eq!(grid.width, MAP_WIDTH);
-        assert_eq!(grid.height, MAP_HEIGHT);
-        assert_eq!(grid.tiles.len(), (MAP_WIDTH * MAP_HEIGHT) as usize);
+        assert_eq!(grid.width, TEST_WIDTH);
+        assert_eq!(grid.height, TEST_HEIGHT);
+        assert_eq!(grid.tiles.len(), (TEST_WIDTH * TEST_HEIGHT) as usize);
     }
 
     #[test]
@@ -381,8 +424,8 @@ mod tests {
         app.update();
 
         let grid = app.world().resource::<GridWorld>();
-        for x in 0..MAP_WIDTH {
-            let hex = offset_to_hex(x, MAP_HEIGHT - 1);
+        for x in 0..TEST_WIDTH {
+            let hex = offset_to_hex(x, TEST_HEIGHT - 1);
             let entity = grid.tiles[&hex];
             let tile = app.world().get::<Tile>(entity).unwrap();
             assert_eq!(tile.terrain, TerrainType::Surface);
@@ -411,7 +454,7 @@ mod tests {
         app.update();
 
         let grid = app.world().resource::<GridWorld>();
-        let near_surface = offset_to_hex(0, MAP_HEIGHT - 2);
+        let near_surface = offset_to_hex(0, TEST_HEIGHT - 2);
         let deep = offset_to_hex(0, 0);
         let surface_tile = app.world().get::<Tile>(grid.tiles[&near_surface]).unwrap();
         let deep_tile = app.world().get::<Tile>(grid.tiles[&deep]).unwrap();
@@ -437,7 +480,7 @@ mod tests {
         app.add_systems(Startup, terrain_generation);
         app.update();
 
-        let player_start = offset_to_hex(MAP_WIDTH / 2, MAP_HEIGHT / 2);
+        let player_start = offset_to_hex(TEST_WIDTH / 2, TEST_HEIGHT / 2);
         let mut hive_count = 0;
         let mut q = app.world_mut().query::<(&GridPos, &Hive)>();
         for (gpos, _) in q.iter(app.world()) {
@@ -447,7 +490,7 @@ mod tests {
                 "hive too close to start"
             );
         }
-        assert!(hive_count > 0 && hive_count <= HIVE_COUNT as i32);
+        assert!(hive_count > 0 && hive_count <= TEST_HIVES as i32);
     }
 
     #[test]
